@@ -35,3 +35,4 @@ coverage/
 # Misc
 *.bak
 *.tmp
+.opencode/
