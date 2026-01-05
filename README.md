@@ -96,26 +96,73 @@ Build Agent: 好的，我来启动一个群聊讨论。
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `topic` | string | - | 讨论话题（必填） |
-| `agents` | string[] | `['advocate', 'critic', 'moderator']` | 参与讨论的 agents |
-| `mode` | enum | `'debate'` | 讨论模式（目前仅支持 debate） |
+| `agents` | string[] | `['advocate', 'critic', 'moderator']` | 参与讨论的预注册 agents (opencode.json) |
+| `participants` | object[] | `[]` | 临时定义的参与者 (覆盖 agents) |
+| `mode` | enum | `'debate'` | 讨论模式: `'debate'` 或 `'collaborative'` |
 | `rounds` | number | `3` | 讨论轮数（1-10） |
+| `files` | string[] | `[]` | 参考文件路径列表 |
+| `context` | string | - | 额外的上下文背景信息 |
+| `keep_sessions` | boolean | `false` | 是否保留子会话 (用于调试) |
 | `verbose` | boolean | `true` | 是否显示完整对话记录 |
 
-## 🚨 错误码与处理
+> **提示**: 默认超时时间为 10 分钟，并发数为 2。
 
-v0.3.0 引入了标准化的错误码，方便程序化处理异常：
+### `participants` 对象结构
 
-| 错误码 | 含义 | 建议 |
-|--------|------|------|
-| `ETIMEDOUT` | 操作超时 (网络或逻辑) | 检查网络或增加超时配置 |
-| `E_SHUTTING_DOWN` | 引擎正在关闭 | 停止发送新请求 |
-| `ABORT_ERR` | 操作被取消 | 无需重试 |
+如果你需要临时定义角色或使用特定的 subagent 类型：
+
+```typescript
+{
+  name: string;          // 显示名称 (如 "Frontend", "PM")
+  subagent_type: string; // 对应的 agent 类型 (如 "general", "critic")
+  role?: string;         // (可选) 具体的职责描述 prompt
+}
+```
 
 ## 📖 使用场景
 
-### 技术选型讨论
+### 1. 技术选型 (Debate Mode)
 
+默认模式，适合权衡利弊。
+
+```json
+{
+  "topic": "应该用 REST API 还是 GraphQL？",
+  "mode": "debate",
+  "agents": ["advocate", "critic", "moderator"]
+}
 ```
+
+### 2. 协作方案设计 (Collaborative Mode)
+
+适合多角色共同完善一个方案。
+
+```json
+{
+  "topic": "设计一个高可用的支付系统架构",
+  "mode": "collaborative",
+  "participants": [
+    { "name": "Architect", "subagent_type": "critic", "role": "负责系统整体架构与可用性设计" },
+    { "name": "DBA", "subagent_type": "general", "role": "负责数据库选型与一致性保障" },
+    { "name": "Security", "subagent_type": "critic", "role": "负责支付安全与合规" }
+  ],
+  "rounds": 5
+}
+```
+
+### 3. 代码审查 (With Files)
+
+让 Agent 读取本地文件进行讨论。
+
+```json
+{
+  "topic": "审查当前 Auth 模块的安全性",
+  "files": ["src/auth/AuthService.ts", "src/auth/jwt.ts"],
+  "mode": "collaborative",
+  "context": "重点关注 Token 泄露风险和过期处理"
+}
+```
+
 话题: "应该用 REST API 还是 GraphQL？"
 ```
 
