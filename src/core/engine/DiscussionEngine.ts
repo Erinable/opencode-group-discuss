@@ -441,7 +441,7 @@ ${context}
    private async cleanup(): Promise<void> {
      if (this.cleanupPromise) return this.cleanupPromise;
  
-     this.cleanupPromise = (async () => {
+     const cleanupLogic = async () => {
        try {
          await this.dispatcher.shutdown({ awaitIdle: true, timeoutMs: 30000 });
        } catch (e) {
@@ -468,6 +468,20 @@ ${context}
                await this.logger.warn(`Failed to delete session ${id}`, { error: e });
            }
        }));
+     };
+
+     this.cleanupPromise = (async () => {
+        let timeoutId: NodeJS.Timeout | undefined;
+        try {
+            const timeoutPromise = new Promise<void>((_, reject) => {
+                timeoutId = setTimeout(() => reject(new Error('Cleanup timeout')), 5000);
+            });
+            await Promise.race([cleanupLogic(), timeoutPromise]);
+        } catch (error) {
+            await this.logger.warn('Cleanup process failed or timed out', error as any);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
      })();
  
      await this.cleanupPromise;
