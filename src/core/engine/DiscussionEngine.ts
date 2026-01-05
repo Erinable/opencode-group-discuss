@@ -499,33 +499,8 @@ ${context}
      const active = signals.filter(Boolean);
      if (active.length === 0) return this.abortController.signal;
      if (active.length === 1) return active[0];
-     if ((AbortSignal as any).any) {
-       return (AbortSignal as any).any(active) as AbortSignal;
-     }
-     
-     const controller = new AbortController();
-     const onAbort = (evt: Event) => {
-        const reason = (evt.target as AbortSignal).reason;
-        controller.abort(reason);
-     };
-
-     // Clean up listeners when combined signal is aborted
-     const cleanup = () => {
-        controller.signal.removeEventListener('abort', cleanup);
-        for (const sig of active) {
-            sig.removeEventListener('abort', onAbort);
-        }
-     };
-     controller.signal.addEventListener('abort', cleanup);
-
-     for (const sig of active) {
-       if (sig.aborted) {
-         controller.abort(sig.reason);
-         return controller.signal;
-       }
-       sig.addEventListener('abort', onAbort, { once: true });
-     }
-     return controller.signal;
+     // Rely on Node >= 20 AbortSignal.any
+     return (AbortSignal as any).any(active) as AbortSignal;
    }
  
    private isAbortLike(error: any): boolean {

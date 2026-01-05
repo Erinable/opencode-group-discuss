@@ -26,7 +26,8 @@ export async function withRetry<T>(
       return error.status === 400 || error.status === 401 || error.status === 403 || error.status === 404 || error.status === 409;
     }
     const code = (error as any).code;
-    if (code === 'SHUTDOWN_TIMEOUT' || code === 'E_SHUTTING_DOWN') return true;
+    const cause = (error as any).cause;
+    if (cause === 'SHUTDOWN_TIMEOUT' || code === 'SHUTDOWN_TIMEOUT' || code === 'E_SHUTTING_DOWN' || code === 'ABORT_ERR') return true;
     return false;
   });
 

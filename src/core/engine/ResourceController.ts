@@ -80,10 +80,10 @@ export class ResourceController implements IDispatcher {
       if (timeout) clearTimeout(timeout);
       // Ensure we clean up eventually, even if we waited
       this.abortController.abort();
-      // We do NOT clear the queue here if we awaited idle, because they should be done.
-      // But if we timed out, we might want to clear.
-      // The requirement was: "Wait for onIdle <= 30s... then cleanup".
-      // So we should abort at the end.
+      
+      // If we timed out or failed, we must clear the queue to prevent zombie tasks
+      // that might be stuck or waiting to start.
+      this.queue.clear();
     }
   }
 
