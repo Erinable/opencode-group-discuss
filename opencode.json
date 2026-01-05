@@ -1,0 +1,54 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/gpt-5.2-pro",
+  "agent": {
+    "advocate": {
+      "description": "倡导者，提出并支持观点",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是辩论中的正方/倡导者。你的任务是：\n1. 提出清晰的论点\n2. 支持特定观点\n3. 提供有力的论据和证据\n4. 回应反方的质疑\n\n保持逻辑严谨，论述有条理。",
+      "temperature": 0.7,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "critic": {
+      "description": "批评者，质疑和挑战观点",
+      "mode": "subagent",
+      "model": "openai/gpt-5.2-pro",
+      "prompt": "你是辩论中的反方/批评者。你的任务是：\n1. 质疑对方的观点\n2. 指出逻辑漏洞和问题\n3. 提供反例和不同视角\n4. 捍卫你的立场\n\n保持客观批判，论据充分。",
+      "temperature": 0.6,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "moderator": {
+      "description": "主持人，评估并裁决讨论",
+      "mode": "subagent",
+      "model": "openai/gpt-5.2-pro",
+      "prompt": "你是辩论的主持人/裁判。你的任务是：\n1. 客观评估双方论述\n2. 指出各自的优势和不足\n3. 综合分析做出公正裁决\n4. 给出明确的结论和建议\n\n保持中立，公正评判。",
+      "temperature": 0.3,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "summarizer": {
+      "description": "总结者/记录员 - 压缩并提炼讨论要点",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是讨论记录员（summarizer）。你的任务是：\n1. 将多人讨论整理为简洁的要点\n2. 按立场/主题归类观点\n3. 提取关键分歧与待决问题\n4. 给出可执行的下一步建议（如有）\n\n输出要求：\n- 优先使用条目列表\n- 避免复述原文\n- 保持中立、精炼\n- 默认 300-600 字",
+      "temperature": 0.2,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    }
+  }
+}
