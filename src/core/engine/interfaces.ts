@@ -59,7 +59,7 @@ export interface DispatchOptions {
 
 export interface IDispatcher {
   dispatch<T>(task: (signal: AbortSignal) => Promise<T>, options?: DispatchOptions): Promise<T>;
-  shutdown(options?: { awaitIdle?: boolean }): Promise<void>;
+  shutdown(options?: { awaitIdle?: boolean; timeoutMs?: number }): Promise<void>;
   getPendingCount(): number;
 }
 

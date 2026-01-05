@@ -12,14 +12,20 @@ export class ResourceController implements IDispatcher {
 
   async dispatch<T>(task: (signal: AbortSignal) => Promise<T>, options: DispatchOptions = {}): Promise<T> {
     if (this.abortController.signal.aborted) {
-      throw new Error('Dispatcher is shutting down');
+      const abortErr = new Error('Dispatcher is shutting down');
+      abortErr.name = 'AbortError';
+      (abortErr as any).code = 'ABORT_ERR';
+      throw abortErr;
     }
 
     const { priority = 0, timeoutMs, signal } = options;
 
     return this.queue.add(async () => {
       if (this.abortController.signal.aborted) {
-        throw new Error('Dispatcher is shutting down');
+        const abortErr = new Error('Dispatcher is shutting down');
+        abortErr.name = 'AbortError';
+        (abortErr as any).code = 'ABORT_ERR';
+        throw abortErr;
       }
 
       const controller = new AbortController();
@@ -45,11 +51,26 @@ export class ResourceController implements IDispatcher {
     }, { priority }) as Promise<T>;
   }
 
-  async shutdown(options: { awaitIdle?: boolean } = {}): Promise<void> {
+  async shutdown(options: { awaitIdle?: boolean; timeoutMs?: number } = {}): Promise<void> {
+    const { awaitIdle = false, timeoutMs = 30000 } = options;
+
     this.abortController.abort();
     this.queue.clear();
-    if (options.awaitIdle) {
-      await this.queue.onIdle();
+
+    if (awaitIdle) {
+      const onIdle = this.queue.onIdle();
+      const timeoutError = new Error('ShutdownTimeoutError');
+      (timeoutError as any).code = 'SHUTDOWN_TIMEOUT';
+
+      let timeout: NodeJS.Timeout | undefined;
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(timeoutError), timeoutMs);
+        });
+        await Promise.race([onIdle, timeoutPromise]);
+      } finally {
+        if (timeout) clearTimeout(timeout);
+      }
     }
   }
 

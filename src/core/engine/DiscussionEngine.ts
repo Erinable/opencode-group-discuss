@@ -6,7 +6,7 @@ import {
   IDispatcher
 } from './interfaces.js';
 import { ResourceController } from './ResourceController.js';
-import { DiscussionResult, DiscussionMessage, DiscussionParticipant } from '../../types/index.js';
+import { DiscussionResult, DiscussionMessage, DiscussionParticipant, DiscussionStatus } from '../../types/index.js';
 import { Logger } from '../../utils/Logger.js';
 import { AsyncFS } from '../../utils/AsyncFS.js';
 import { withRetry } from '../../utils/withRetry.js';
@@ -22,11 +22,14 @@ export class DiscussionEngine implements IDiscussionEngine {
   private sessionID: string;
   private dispatcher!: IDispatcher;
   private modeInstance!: any; // DiscussionMode interface
+  private abortController!: AbortController;
+  private cleanupPromise?: Promise<void>;
 
   constructor(client: any, sessionID: string, logger?: Logger) {
     this.client = client;
     this.sessionID = sessionID;
     this.logger = logger || new Logger(client);
+    this.abortController = new AbortController();
   }
 
   async init(options: EngineOptions): Promise<void> {
@@ -59,47 +62,56 @@ export class DiscussionEngine implements IDiscussionEngine {
 
   async run(): Promise<DiscussionResult> {
     if (!this.state) throw new Error('Engine not initialized');
-    
+
+    const engineSignal = this.abortController.signal;
     this.state.status = EngineState.RUNNING;
     this.state.updatedAt = Date.now();
     const startTime = Date.now();
 
     await this.logger.info(`🚀 动态群聊启动：${this.state.topic}`);
 
+    const buildResult = (conclusion: string): DiscussionResult => ({
+      topic: this.state.topic,
+      messages: this.state.messages,
+      conclusion,
+      consensus: this.modeInstance.calculateConsensus(this.state.messages),
+      rounds: this.state.currentRound,
+      duration: Date.now() - startTime,
+      createdSessionIDs: Object.values(this.state.subSessionIds),
+      status: this.mapStatus(this.state.status),
+      stopReason: this.state.stopReason,
+      errors: this.state.errors,
+    });
+
     try {
       for (let round = 1; round <= this.state.maxRounds; round++) {
+        if (engineSignal.aborted) break;
         this.state.currentRound = round;
-        await this.runRound();
-        
-        // Update state
+        await this.runRound(engineSignal);
+
         this.state.updatedAt = Date.now();
-        
+
+        if (engineSignal.aborted) break;
         if (await this.modeInstance.shouldStop(this.state.messages, this.state.currentRound)) {
            await this.logger.info('Discussion stopped early by mode logic.');
            break;
         }
       }
 
-      this.state.status = this.state.stopReason ? EngineState.CANCELLED : EngineState.COMPLETED;
-      const conclusion = await this.modeInstance.generateConclusion(
-        this.state.messages,
-        this.state.topic
-      );
+      this.state.status = this.state.stopReason || engineSignal.aborted ? EngineState.CANCELLED : EngineState.COMPLETED;
+      const conclusion = await this.safeGenerateConclusion();
 
-      return {
-        topic: this.state.topic,
-        messages: this.state.messages,
-        conclusion,
-        consensus: this.modeInstance.calculateConsensus(this.state.messages),
-        rounds: this.state.currentRound,
-        duration: Date.now() - startTime,
-        createdSessionIDs: Object.values(this.state.subSessionIds),
-        status: this.state.status === EngineState.COMPLETED ? 'completed' : this.state.status === EngineState.CANCELLED ? 'cancelled' : 'failed',
-        stopReason: this.state.stopReason,
-        errors: this.state.errors,
-      };
+      return buildResult(conclusion);
 
     } catch (error) {
+      if (this.isAbortLike(error)) {
+        this.state.status = EngineState.CANCELLED;
+        this.state.stopReason = this.state.stopReason || (error as Error).message;
+        await this.logger.warn('Discussion cancelled', error as any);
+        const conclusion = await this.safeGenerateConclusion();
+        return buildResult(conclusion);
+      }
+
       this.state.status = EngineState.FAILED;
       this.state.error = error as Error;
       this.state.stopReason = error instanceof Error ? error.message : String(error);
@@ -122,10 +134,13 @@ export class DiscussionEngine implements IDiscussionEngine {
   }
 
   async stop(reason?: string): Promise<void> {
+    if (this.abortController.signal.aborted) return;
     this.state.status = EngineState.CANCELLED;
     this.state.stopReason = reason;
-    await this.logger.warn(`Discussion stopped: ${reason}`);
-    await this.cleanup();
+    const abortError = new Error(reason ?? 'Discussion stopped');
+    abortError.name = 'AbortError';
+    this.abortController.abort(abortError);
+    await this.logger.warn(`Discussion stopped: ${reason ?? 'cancelled'}`);
   }
 
   getState(): IDiscussionState {
@@ -134,7 +149,9 @@ export class DiscussionEngine implements IDiscussionEngine {
 
   // --- Private Methods ---
 
-  private async runRound(): Promise<void> {
+  private async runRound(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
+
     const speakers = await this.modeInstance.getSpeakers(
       this.state.currentRound,
       this.state.maxRounds,
@@ -149,8 +166,9 @@ export class DiscussionEngine implements IDiscussionEngine {
 
     // Dispatch tasks in parallel (controlled by ResourceController)
     const promises = speakers.map((name: string) => {
-      return this.dispatcher.dispatch(async (signal) => {
-        if (signal.aborted) return null;
+      return this.dispatcher.dispatch(async (dispatchSignal) => {
+        const effectiveSignal = this.combineSignals([signal, dispatchSignal].filter(Boolean) as AbortSignal[]);
+        if (effectiveSignal.aborted) return null;
 
         // Validate speaker exists
         const participantExists = this.state.participants.some(p => p.name === name);
@@ -160,16 +178,23 @@ export class DiscussionEngine implements IDiscussionEngine {
         }
         
         try {
-           return await this.executeAgent(name, roundContext, signal);
+           return await this.executeAgent(name, roundContext, effectiveSignal);
         } catch (e) {
+           if (this.isAbortLike(e)) return null;
            errors.push({ agent: name, round: this.state.currentRound, message: e instanceof Error ? e.message : String(e) });
            await this.logger.error(`Error executing agent ${name}`, e);
            return null;
         }
-      }, { timeoutMs: this.options.timeout });
+      }, { timeoutMs: this.options.timeout, signal });
     });
 
-    const outcomes = await Promise.all(promises);
+    let outcomes: (DiscussionMessage | null)[] = [];
+    try {
+      outcomes = await Promise.all(promises);
+    } catch (err) {
+      if (this.isAbortLike(err)) return;
+      throw err;
+    }
     
     for (const res of outcomes) {
       if (res) {
@@ -184,20 +209,22 @@ export class DiscussionEngine implements IDiscussionEngine {
                         ({ name, subagentType: 'general' } as DiscussionParticipant);
 
     const prompt = this.buildPromptForAgent(name, participant, context);
+    const engineSignal = signal ?? this.abortController.signal;
     
-    const agentSessionID = await this.getAgentSessionID(name, signal);
+    const agentSessionID = await this.getAgentSessionID(name, engineSignal);
     if (!agentSessionID) {
       throw new Error(`Unable to get session for agent ${name}`);
     }
 
     // Use withRetry for the API call
     const content = await withRetry(async (innerSignal) => {
-        return await this.invokeDirect(participant.subagentType, prompt, agentSessionID, { signal: innerSignal, timeoutMs: this.options.timeout });
+        const combinedSignal = this.combineSignals([engineSignal, innerSignal].filter(Boolean) as AbortSignal[]);
+        return await this.invokeDirect(participant.subagentType, prompt, agentSessionID, { signal: combinedSignal, timeoutMs: this.options.timeout });
     }, {
         retries: this.options.maxRetries,
         minTimeout: 1000,
         factor: 2,
-        signal,
+        signal: engineSignal,
     });
 
     return {
@@ -283,6 +310,22 @@ ${context}
 
   private async invokeDirect(agentType: string, prompt: string, sessionId: string, opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<string> {
       const { signal, timeoutMs } = opts;
+      const signals: AbortSignal[] = [this.abortController.signal];
+      let timeoutId: NodeJS.Timeout | undefined;
+      let timeoutController: AbortController | undefined;
+
+      if (signal) signals.push(signal);
+
+      if (timeoutMs && timeoutMs > 0) {
+        timeoutController = new AbortController();
+        const err = new Error('invokeDirect timeout');
+        err.name = 'TimeoutError';
+        (err as any).code = 'ETIMEDOUT';
+        timeoutId = setTimeout(() => timeoutController?.abort(err), timeoutMs);
+        signals.push(timeoutController.signal);
+      }
+
+      const combinedSignal = this.combineSignals(signals);
 
       const runCall = async () => {
         if (this.client?.session?.prompt) {
@@ -292,7 +335,7 @@ ${context}
                     agent: agentType
                 },
                 path: { id: sessionId },
-                signal
+                signal: combinedSignal
             });
             return this.extractTextFromResponse(res);
         }
@@ -304,7 +347,7 @@ ${context}
                     agent: agentType
                 },
                 path: { id: sessionId },
-                signal
+                signal: combinedSignal
             });
             return this.extractTextFromResponse(res);
         }
@@ -312,22 +355,13 @@ ${context}
         throw new Error('OpenCode client prompt function not available');
       };
 
-      if (timeoutMs && timeoutMs > 0) {
-        return await Promise.race([
-          runCall(),
-          new Promise<string>((_, reject) => {
-            const timeout = setTimeout(() => {
-              const err = new Error('invokeDirect timeout');
-              (err as any).name = 'TimeoutError';
-              reject(err);
-            }, timeoutMs);
-            // cleanup handled by settle
-          })
-        ]);
+      try {
+        return await runCall();
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
       }
+   }
 
-      return await runCall();
-  }
 
   private extractTextFromResponse(res: any): string {
     if (typeof res === "string") return res;
@@ -347,19 +381,22 @@ ${context}
       return this.state.subSessionIds[name];
     }
 
+    const baseSignal = signal ?? this.abortController.signal;
+
     if (this.client?.session?.create && this.sessionID) {
       // Create session with Retry
       try {
         const newSessionID = await withRetry(async (innerSignal) => {
+            const combinedSignal = this.combineSignals([baseSignal, innerSignal].filter(Boolean) as AbortSignal[]);
             const res = await this.client.session.create({
               parentID: this.sessionID,
               title: `Discussion Agent: ${name}`,
-              signal: innerSignal || signal,
+              signal: combinedSignal,
             });
             const session = res?.data || res;
             if (!session?.id) throw new Error('Session creation returned no ID');
             return session.id;
-        }, { retries: 3, signal });
+        }, { retries: 3, signal: baseSignal });
 
         await this.logger.debug(`Created sub-session for agent ${name}: ${newSessionID}`);
         this.state.subSessionIds[name] = newSessionID;
@@ -371,6 +408,7 @@ ${context}
     return this.sessionID;
   }
 
+
   private async summarizeHistory(): Promise<string> {
     const history = this.state.messages
       .map((m) => `@${m.agent}: ${m.content}`)
@@ -380,40 +418,102 @@ ${context}
     // Summarize also needs retry
     return await withRetry((signal) => this.invokeDirect("summarizer", prompt, this.sessionID, { signal, timeoutMs: this.options.timeout }), {
       retries: this.options.maxRetries,
-      signal: undefined,
+      signal: this.abortController.signal,
     });
   }
+ 
+   private async cleanup(): Promise<void> {
+     if (this.cleanupPromise) return this.cleanupPromise;
+ 
+     this.cleanupPromise = (async () => {
+       try {
+         await this.dispatcher.shutdown({ awaitIdle: true, timeoutMs: 30000 });
+       } catch (e) {
+         await this.logger.warn('Dispatcher shutdown failed', e as any);
+       }
+ 
+       if (this.options.keepSessions) {
+         await this.logger.info("keep_sessions=true, skipping cleanup.");
+         return;
+       }
+ 
+       const ids = Object.values(this.state.subSessionIds);
+       if (ids.length === 0) return;
+ 
+       await this.logger.info(`Cleaning up ${ids.length} sub-sessions...`);
+ 
+       if (!this.client?.session?.delete) return;
+ 
+       // Parallel cleanup
+       await Promise.all(ids.map(async (id) => {
+           try {
+               await this.client.session.delete({ path: { id } });
+           } catch (e) {
+               await this.logger.warn(`Failed to delete session ${id}`, { error: e });
+           }
+       }));
+     })();
+ 
+     await this.cleanupPromise;
+   }
+ 
+   private async safeGenerateConclusion(): Promise<string> {
+     try {
+       return await this.modeInstance.generateConclusion(this.state.messages, this.state.topic);
+     } catch (e) {
+       await this.logger.warn('Failed to generate conclusion', e as any);
+       return '';
+     }
+   }
+ 
+   private mapStatus(state: EngineState): DiscussionStatus {
+     switch (state) {
+       case EngineState.COMPLETED:
+         return 'completed';
+       case EngineState.CANCELLED:
+         return 'cancelled';
+       case EngineState.RUNNING:
+         return 'running';
+       default:
+         return 'failed';
+     }
+   }
+ 
+   private combineSignals(signals: AbortSignal[]): AbortSignal {
+     const active = signals.filter(Boolean);
+     if (active.length === 0) return this.abortController.signal;
+     if (active.length === 1) return active[0];
+     if ((AbortSignal as any).any) {
+       return (AbortSignal as any).any(active) as AbortSignal;
+     }
+     const controller = new AbortController();
+     const onAbort = () => controller.abort();
+     for (const sig of active) {
+       sig.addEventListener('abort', onAbort);
+       if (sig.aborted && !controller.signal.aborted) {
+         controller.abort((sig as any).reason);
+       }
+     }
+     return controller.signal;
+   }
+ 
+   private isAbortLike(error: any): boolean {
+     if (!error) return false;
+     const code = (error as any).code;
+     const message: string = (error as any).message || '';
+     return error.name === 'AbortError'
+       || code === 'ABORT_ERR'
+       || code === 'SHUTDOWN_TIMEOUT'
+       || code === 'ETIMEDOUT'
+       || message.includes('Dispatcher is shutting down');
+   }
+ 
+   private getModeInstance(modeName: string) {
+     switch (modeName) {
+       case "debate": return new DebateMode();
+       case "collaborative": return new CollaborativeMode();
+       default: return new DebateMode();
+     }
+   }
+ }
 
-  private async cleanup(): Promise<void> {
-    await this.dispatcher.shutdown();
-
-    if (this.options.keepSessions) {
-      await this.logger.info("keep_sessions=true, skipping cleanup.");
-      return;
-    }
-
-    const ids = Object.values(this.state.subSessionIds);
-    if (ids.length === 0) return;
-
-    await this.logger.info(`Cleaning up ${ids.length} sub-sessions...`);
-
-    if (!this.client?.session?.delete) return;
-
-    // Parallel cleanup
-    await Promise.all(ids.map(async (id) => {
-        try {
-            await this.client.session.delete({ path: { id } });
-        } catch (e) {
-            await this.logger.warn(`Failed to delete session ${id}`, { error: e });
-        }
-    }));
-  }
-
-  private getModeInstance(modeName: string) {
-    switch (modeName) {
-      case "debate": return new DebateMode();
-      case "collaborative": return new CollaborativeMode();
-      default: return new DebateMode();
-    }
-  }
-}
