@@ -5,7 +5,7 @@
 import { tool } from "@opencode-ai/plugin";
 import { Logger } from "../utils/Logger.js";
 
-export function createSessionManageTool(client: any) {
+export function createSessionManageTool(client: any): any {
   const boundLogger = new Logger(client);
 
   return tool({

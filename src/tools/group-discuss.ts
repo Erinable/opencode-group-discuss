@@ -11,7 +11,7 @@ import { Logger } from "../utils/Logger.js";
 import * as fs from "fs";
 import * as path from "path";
 
-export function createGroupDiscussTool(client: any) {
+export function createGroupDiscussTool(client: any): any {
   const boundLogger = new Logger(client);
 
   return tool({
