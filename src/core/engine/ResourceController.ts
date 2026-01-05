@@ -4,6 +4,7 @@ import { DispatchOptions, IDispatcher } from './interfaces.js';
 export class ResourceController implements IDispatcher {
   private queue: PQueue;
   private abortController: AbortController;
+  private isShuttingDown: boolean = false;
 
   constructor(concurrency: number = 2) {
     this.queue = new PQueue({ concurrency });
@@ -11,10 +12,10 @@ export class ResourceController implements IDispatcher {
   }
 
   async dispatch<T>(task: (signal: AbortSignal) => Promise<T>, options: DispatchOptions = {}): Promise<T> {
-    if (this.abortController.signal.aborted) {
+    if (this.abortController.signal.aborted || this.isShuttingDown) {
       const abortErr = new Error('Dispatcher is shutting down');
       abortErr.name = 'AbortError';
-      (abortErr as any).code = 'ABORT_ERR';
+      (abortErr as any).code = 'E_SHUTTING_DOWN';
       throw abortErr;
     }
 
@@ -54,23 +55,35 @@ export class ResourceController implements IDispatcher {
   async shutdown(options: { awaitIdle?: boolean; timeoutMs?: number } = {}): Promise<void> {
     const { awaitIdle = false, timeoutMs = 30000 } = options;
 
-    this.abortController.abort();
-    this.queue.clear();
+    this.isShuttingDown = true;
 
-    if (awaitIdle) {
-      const onIdle = this.queue.onIdle();
-      const timeoutError = new Error('ShutdownTimeoutError');
-      (timeoutError as any).code = 'SHUTDOWN_TIMEOUT';
+    if (!awaitIdle) {
+      this.abortController.abort();
+      this.queue.clear();
+      return;
+    }
 
-      let timeout: NodeJS.Timeout | undefined;
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          timeout = setTimeout(() => reject(timeoutError), timeoutMs);
-        });
-        await Promise.race([onIdle, timeoutPromise]);
-      } finally {
-        if (timeout) clearTimeout(timeout);
-      }
+    // awaitIdle = true: wait for pending tasks to finish
+    const onIdle = this.queue.onIdle();
+    const timeoutError = new Error('ShutdownTimeoutError');
+    timeoutError.name = 'TimeoutError';
+    (timeoutError as any).code = 'ETIMEDOUT';
+    (timeoutError as any).cause = 'SHUTDOWN_TIMEOUT';
+
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(timeoutError), timeoutMs);
+      });
+      await Promise.race([onIdle, timeoutPromise]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      // Ensure we clean up eventually, even if we waited
+      this.abortController.abort();
+      // We do NOT clear the queue here if we awaited idle, because they should be done.
+      // But if we timed out, we might want to clear.
+      // The requirement was: "Wait for onIdle <= 30s... then cleanup".
+      // So we should abort at the end.
     }
   }
 
