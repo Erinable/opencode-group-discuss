@@ -44,7 +44,8 @@ export class DiscussionEngine implements IDiscussionEngine {
       participants: options.participants,
       subSessionIds: {},
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      errors: [],
     };
 
     // Initialize Mode
@@ -79,7 +80,7 @@ export class DiscussionEngine implements IDiscussionEngine {
         }
       }
 
-      this.state.status = EngineState.COMPLETED;
+      this.state.status = this.state.stopReason ? EngineState.CANCELLED : EngineState.COMPLETED;
       const conclusion = await this.modeInstance.generateConclusion(
         this.state.messages,
         this.state.topic
@@ -93,11 +94,15 @@ export class DiscussionEngine implements IDiscussionEngine {
         rounds: this.state.currentRound,
         duration: Date.now() - startTime,
         createdSessionIDs: Object.values(this.state.subSessionIds),
+        status: this.state.status === EngineState.COMPLETED ? 'completed' : this.state.status === EngineState.CANCELLED ? 'cancelled' : 'failed',
+        stopReason: this.state.stopReason,
+        errors: this.state.errors,
       };
 
     } catch (error) {
       this.state.status = EngineState.FAILED;
       this.state.error = error as Error;
+      this.state.stopReason = error instanceof Error ? error.message : String(error);
       await this.logger.error('Discussion execution failed', error);
       throw error;
     } finally {
@@ -117,7 +122,8 @@ export class DiscussionEngine implements IDiscussionEngine {
   }
 
   async stop(reason?: string): Promise<void> {
-    this.state.status = EngineState.FAILED; // or cancelled
+    this.state.status = EngineState.CANCELLED;
+    this.state.stopReason = reason;
     await this.logger.warn(`Discussion stopped: ${reason}`);
     await this.cleanup();
   }
@@ -139,19 +145,28 @@ export class DiscussionEngine implements IDiscussionEngine {
 
     const roundContext = await this.buildContext();
     const results: (DiscussionMessage | null)[] = [];
+    const errors = this.state.errors ?? (this.state.errors = []);
 
     // Dispatch tasks in parallel (controlled by ResourceController)
     const promises = speakers.map((name: string) => {
       return this.dispatcher.dispatch(async (signal) => {
         if (signal.aborted) return null;
+
+        // Validate speaker exists
+        const participantExists = this.state.participants.some(p => p.name === name);
+        if (!participantExists) {
+          errors.push({ agent: name, round: this.state.currentRound, message: 'Speaker not found in participants' });
+          return null;
+        }
         
         try {
-           return await this.executeAgent(name, roundContext);
+           return await this.executeAgent(name, roundContext, signal);
         } catch (e) {
+           errors.push({ agent: name, round: this.state.currentRound, message: e instanceof Error ? e.message : String(e) });
            await this.logger.error(`Error executing agent ${name}`, e);
            return null;
         }
-      });
+      }, { timeoutMs: this.options.timeout });
     });
 
     const outcomes = await Promise.all(promises);
@@ -164,24 +179,25 @@ export class DiscussionEngine implements IDiscussionEngine {
     }
   }
 
-  private async executeAgent(name: string, context: string): Promise<DiscussionMessage> {
+  private async executeAgent(name: string, context: string, signal?: AbortSignal): Promise<DiscussionMessage> {
     const participant = this.state.participants.find(p => p.name === name) || 
                         ({ name, subagentType: 'general' } as DiscussionParticipant);
 
     const prompt = this.buildPromptForAgent(name, participant, context);
     
-    const agentSessionID = await this.getAgentSessionID(name);
+    const agentSessionID = await this.getAgentSessionID(name, signal);
     if (!agentSessionID) {
       throw new Error(`Unable to get session for agent ${name}`);
     }
 
     // Use withRetry for the API call
-    const content = await withRetry(async () => {
-        return await this.invokeDirect(participant.subagentType, prompt, agentSessionID);
+    const content = await withRetry(async (innerSignal) => {
+        return await this.invokeDirect(participant.subagentType, prompt, agentSessionID, { signal: innerSignal, timeoutMs: this.options.timeout });
     }, {
         retries: this.options.maxRetries,
         minTimeout: 1000,
-        factor: 2
+        factor: 2,
+        signal,
     });
 
     return {
@@ -265,32 +281,52 @@ ${context}
 `;
   }
 
-  private async invokeDirect(agentType: string, prompt: string, sessionId: string): Promise<string> {
-      // Use client.session.prompt if available
-      if (this.client?.session?.prompt) {
-          const res = await this.client.session.prompt({
-              body: {
-                  parts: [{ type: "text", text: prompt }],
-                  agent: agentType
-              },
-              path: { id: sessionId }
-          });
-          return this.extractTextFromResponse(res);
+  private async invokeDirect(agentType: string, prompt: string, sessionId: string, opts: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<string> {
+      const { signal, timeoutMs } = opts;
+
+      const runCall = async () => {
+        if (this.client?.session?.prompt) {
+            const res = await this.client.session.prompt({
+                body: {
+                    parts: [{ type: "text", text: prompt }],
+                    agent: agentType
+                },
+                path: { id: sessionId },
+                signal
+            });
+            return this.extractTextFromResponse(res);
+        }
+
+        if (this.client?.prompt) {
+            const res = await this.client.prompt({
+                body: {
+                    parts: [{ type: "text", text: prompt }],
+                    agent: agentType
+                },
+                path: { id: sessionId },
+                signal
+            });
+            return this.extractTextFromResponse(res);
+        }
+
+        throw new Error('OpenCode client prompt function not available');
+      };
+
+      if (timeoutMs && timeoutMs > 0) {
+        return await Promise.race([
+          runCall(),
+          new Promise<string>((_, reject) => {
+            const timeout = setTimeout(() => {
+              const err = new Error('invokeDirect timeout');
+              (err as any).name = 'TimeoutError';
+              reject(err);
+            }, timeoutMs);
+            // cleanup handled by settle
+          })
+        ]);
       }
 
-      // Fallback
-      if (this.client?.prompt) {
-          const res = await this.client.prompt({
-              body: {
-                  parts: [{ type: "text", text: prompt }],
-                  agent: agentType
-              },
-              path: { id: sessionId }
-          });
-          return this.extractTextFromResponse(res);
-      }
-
-      throw new Error('OpenCode client prompt function not available');
+      return await runCall();
   }
 
   private extractTextFromResponse(res: any): string {
@@ -303,10 +339,10 @@ ${context}
     if (data?.text) return data.text;
     if (res?.text) return res.text;
     if (data?.info?.content) return data.info.content;
-    return "...";
+    throw new Error('Failed to extract text from response');
   }
 
-  private async getAgentSessionID(name: string): Promise<string | undefined> {
+  private async getAgentSessionID(name: string, signal?: AbortSignal): Promise<string | undefined> {
     if (this.state.subSessionIds[name]) {
       return this.state.subSessionIds[name];
     }
@@ -314,24 +350,22 @@ ${context}
     if (this.client?.session?.create && this.sessionID) {
       // Create session with Retry
       try {
-        const newSessionID = await withRetry(async () => {
+        const newSessionID = await withRetry(async (innerSignal) => {
             const res = await this.client.session.create({
               parentID: this.sessionID,
               title: `Discussion Agent: ${name}`,
+              signal: innerSignal || signal,
             });
             const session = res?.data || res;
             if (!session?.id) throw new Error('Session creation returned no ID');
             return session.id;
-        }, { retries: 3 });
+        }, { retries: 3, signal });
 
         await this.logger.debug(`Created sub-session for agent ${name}: ${newSessionID}`);
         this.state.subSessionIds[name] = newSessionID;
         return newSessionID;
       } catch (e) {
         await this.logger.warn(`Failed to create sub-session for agent ${name}: ${e}`);
-        // Fallback to root session? Original logic did this.
-        // "Failed to create sub-session for agent ${name}, falling back to root session."
-        // Let's fallback.
       }
     }
     return this.sessionID;
@@ -344,7 +378,10 @@ ${context}
     const prompt = `总结论点：\n${history}`;
     
     // Summarize also needs retry
-    return await withRetry(() => this.invokeDirect("summarizer", prompt, this.sessionID));
+    return await withRetry((signal) => this.invokeDirect("summarizer", prompt, this.sessionID, { signal, timeoutMs: this.options.timeout }), {
+      retries: this.options.maxRetries,
+      signal: undefined,
+    });
   }
 
   private async cleanup(): Promise<void> {

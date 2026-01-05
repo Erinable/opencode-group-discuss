@@ -1,11 +1,12 @@
-import { DiscussionMessage, DiscussionResult, DiscussionParticipant } from '../../types/index.js';
+import { DiscussionMessage, DiscussionResult, DiscussionParticipant, DiscussionError } from '../../types/index.js';
 
 export enum EngineState {
   PENDING = 'PENDING',
   RUNNING = 'RUNNING',
   PAUSED = 'PAUSED',
   COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED'
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED'
 }
 
 export interface EngineOptions {
@@ -36,6 +37,8 @@ export interface IDiscussionState {
   updatedAt: number;
   metadata?: Record<string, any>;
   error?: Error;
+  errors?: DiscussionError[];
+  stopReason?: string;
 }
 
 export interface IDiscussionContext {
@@ -48,9 +51,15 @@ export interface IDiscussionContext {
   setSessionId(agentName: string, sessionId: string): void;
 }
 
+export interface DispatchOptions {
+  priority?: number;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
 export interface IDispatcher {
-  dispatch<T>(task: (signal: AbortSignal) => Promise<T>, priority?: number): Promise<T>;
-  shutdown(): Promise<void>;
+  dispatch<T>(task: (signal: AbortSignal) => Promise<T>, options?: DispatchOptions): Promise<T>;
+  shutdown(options?: { awaitIdle?: boolean }): Promise<void>;
   getPendingCount(): number;
 }
 

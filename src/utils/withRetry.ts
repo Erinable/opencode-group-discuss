@@ -6,23 +6,42 @@ export interface RetryOptions {
   minTimeout?: number;
   maxTimeout?: number;
   randomize?: boolean;
+  signal?: AbortSignal;
+  bailOn?: (error: any) => boolean;
 }
 
 /**
  * Wraps a promise-returning function with retry logic using exponential backoff.
  */
 export async function withRetry<T>(
-  task: () => Promise<T>, 
+  task: (signal?: AbortSignal) => Promise<T>, 
   options: RetryOptions = {}
 ): Promise<T> {
+  const bailOn = options.bailOn ?? ((error: any) => {
+    if (!error) return false;
+    if (error.name === 'AbortError' || error.code === 'ABORT_ERR') return true;
+    if (error.code === 'ETIMEDOUT' || error.name === 'TimeoutError') return true;
+    if (error.status && typeof error.status === 'number') {
+      // bail on 4xx and conflict
+      return error.status === 400 || error.status === 401 || error.status === 403 || error.status === 404 || error.status === 409;
+    }
+    return false;
+  });
+
   return retry(async (bail) => {
+    if (options.signal?.aborted) {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      bail(abortError);
+      throw abortError;
+    }
+
     try {
-      return await task();
+      return await task(options.signal);
     } catch (error: any) {
-      // Unrecoverable errors: Bad Request, Unauthorized, Forbidden
-      if (error.status === 400 || error.status === 401 || error.status === 403) {
+      if (bailOn(error)) {
         bail(error);
-        throw error; // bail expects us to throw or return? async-retry docs: bail(new Error('...'))
+        throw error;
       }
       throw error;
     }

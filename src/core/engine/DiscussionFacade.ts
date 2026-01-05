@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import * as fs from 'fs';
-import * as path from 'path';
 import { EngineOptions } from './interfaces.js';
 import { DiscussionParticipant } from '../../types/index.js';
+import { AgentRegistry } from './AgentRegistry.js';
 
 const ParticipantInputSchema = z.object({
   name: z.string(),
@@ -26,14 +25,15 @@ const InputSchema = z.object({
 });
 
 export class DiscussionFacade {
-  static transform(input: any): EngineOptions {
-    const result = InputSchema.safeParse(input);
+  static async transform(input: any): Promise<EngineOptions> {
+    const normalized = this.normalizeInput(input);
+    const result = InputSchema.safeParse(normalized);
     if (!result.success) {
       throw new Error(`Invalid configuration: ${result.error.message}`);
     }
     
     const data = result.data;
-    const knownAgentIDs = this.loadKnownAgentIDs();
+    const knownAgentIDs = await AgentRegistry.getAgentIDs();
 
     // 1. Validate 'agents' are known
     if (data.agents && data.agents.length > 0) {
@@ -113,38 +113,39 @@ export class DiscussionFacade {
       timeout: data.timeout,
       concurrency: data.concurrency
     };
-  }
+   }
+ 
+   private static normalizeInput(input: any) {
+     const normalized: any = { ...input };
+ 
+     if (Array.isArray(normalized.participants)) {
+       normalized.participants = normalized.participants.map((p: any) => {
+         const subagent_type = p?.subagent_type ?? p?.subagentType ?? 'general';
+         return {
+           ...p,
+           subagent_type
+         };
+       });
+     }
+ 
+     if (normalized.keep_sessions === undefined && normalized.keepSessions !== undefined) {
+       normalized.keep_sessions = normalized.keepSessions;
+     }
+ 
+     if (normalized.rounds === undefined && typeof normalized.maxRounds === 'number') {
+       normalized.rounds = normalized.maxRounds;
+     }
+ 
+     return normalized;
+   }
+ 
+   private static getDefaultAgents(mode: string): string[] {
+     switch (mode) {
 
-  private static getDefaultAgents(mode: string): string[] {
-    switch (mode) {
       case 'debate':
         return ['advocate', 'critic', 'moderator'];
       default:
-        // For collaborative or others, we can default to general agents or specific ones
-        // But the original code defaulted to debate agents for everything.
-        // Let's stick to original behavior or improve?
-        // Original: default: return ["advocate", "critic", "moderator"];
         return ['advocate', 'critic', 'moderator'];
     }
-  }
-
-  private static loadKnownAgentIDs(): Set<string> {
-    const ids = new Set<string>(['general', 'explore']);
-    try {
-      const configPath = path.resolve(process.cwd(), 'opencode.json');
-      if (fs.existsSync(configPath)) {
-        const raw = fs.readFileSync(configPath, 'utf-8');
-        const parsed = JSON.parse(raw);
-        const agent = parsed?.agent;
-        if (agent && typeof agent === 'object') {
-          for (const key of Object.keys(agent)) {
-            ids.add(key);
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return ids;
   }
 }

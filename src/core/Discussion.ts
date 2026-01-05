@@ -22,8 +22,6 @@ export class Discussion {
   async start(): Promise<DiscussionResult> {
     // 1. Adapter Logic: Convert legacy Config (with instantiated Mode) to EngineOptions (with string Mode)
     let modeStr = 'debate';
-    // Check constructor name to infer mode string
-    // This is a workaround because group_discuss.ts instantiates the mode before passing it to Discussion.
     const modeInstance = this.config.mode;
     const ctorName = modeInstance?.constructor?.name || '';
     
@@ -34,15 +32,22 @@ export class Discussion {
     }
 
     // 2. Prepare raw input for Facade validation
-    // We strictly assume 'agents' and 'participants' structure matches what Facade expects
-    // (which mirrors the types/index.ts structure mostly).
+    const participants = this.config.participants?.map((p) => ({
+      ...p,
+      subagent_type: (p as any).subagent_type ?? p.subagentType
+    }));
+
+    const keep_sessions = (this.config as any).keep_sessions ?? this.config.keepSessions;
+
     const rawInput = {
       ...this.config,
+      participants,
+      keep_sessions,
       mode: modeStr
     };
 
-    // 3. Transform and Validate
-    const options = DiscussionFacade.transform(rawInput);
+    // 3. Transform and Validate (async)
+    const options = await DiscussionFacade.transform(rawInput);
     
     // 4. Init Engine
     await this.engine.init(options);

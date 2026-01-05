@@ -9,6 +9,16 @@ export interface DiscussionMessage {
   timestamp: number;
 }
 
+export type DiscussionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface DiscussionError {
+  agent?: string;
+  round?: number;
+  message: string;
+  code?: string;
+  retryCount?: number;
+}
+
 export interface DiscussionResult {
   topic: string;
   messages: DiscussionMessage[];
@@ -16,7 +26,10 @@ export interface DiscussionResult {
   consensus: number; // 0-1 的共识度
   rounds: number;
   duration: number; // 讨论耗时（毫秒）
+  status?: DiscussionStatus;
+  stopReason?: string;
   createdSessionIDs?: string[]; // 本次讨论创建的子 session ID 列表
+  errors?: DiscussionError[];
 }
 
 export interface DiscussionParticipant {
