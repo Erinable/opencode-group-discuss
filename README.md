@@ -2,6 +2,8 @@
 
 🎯 多Agent群聊讨论插件，让OpenCode的AI agents能够协作辩论和讨论问题。
 
+> ⚠️ **v0.3.0 重要更新**: 本版本引入了破坏性变更（Node >= 20, 错误码标准化）。请参考 [迁移指南 (MIGRATION.md)](./MIGRATION.md)。
+
 ## ✨ 特性
 
 - 🗣️ **多Agent辩论** - 正方、反方、裁判三方讨论
@@ -11,6 +13,8 @@
 - ⚡ **实时输出** - 流式显示讨论进展
 
 ## 📦 安装
+
+> **Requirements**: Node.js >= 20.0.0
 
 ```bash
 npm install -g opencode-group-discuss
@@ -96,6 +100,16 @@ Build Agent: 好的，我来启动一个群聊讨论。
 | `mode` | enum | `'debate'` | 讨论模式（目前仅支持 debate） |
 | `rounds` | number | `3` | 讨论轮数（1-10） |
 | `verbose` | boolean | `true` | 是否显示完整对话记录 |
+
+## 🚨 错误码与处理
+
+v0.3.0 引入了标准化的错误码，方便程序化处理异常：
+
+| 错误码 | 含义 | 建议 |
+|--------|------|------|
+| `ETIMEDOUT` | 操作超时 (网络或逻辑) | 检查网络或增加超时配置 |
+| `E_SHUTTING_DOWN` | 引擎正在关闭 | 停止发送新请求 |
+| `ABORT_ERR` | 操作被取消 | 无需重试 |
 
 ## 📖 使用场景
 
