@@ -25,13 +25,16 @@ export async function withRetry<T>(
       // bail on 4xx and conflict
       return error.status === 400 || error.status === 401 || error.status === 403 || error.status === 404 || error.status === 409;
     }
+    const code = (error as any).code;
+    if (code === 'SHUTDOWN_TIMEOUT' || code === 'E_SHUTTING_DOWN') return true;
     return false;
   });
 
-  return retry(async (bail) => {
+  return retry(async (bail, attempt) => {
     if (options.signal?.aborted) {
       const abortError = new Error('Aborted');
       abortError.name = 'AbortError';
+      (abortError as any).code = 'ABORT_ERR';
       bail(abortError);
       throw abortError;
     }
@@ -39,6 +42,7 @@ export async function withRetry<T>(
     try {
       return await task(options.signal);
     } catch (error: any) {
+      error.retryCount = attempt;
       if (bailOn(error)) {
         bail(error);
         throw error;

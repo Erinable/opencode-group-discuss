@@ -98,7 +98,16 @@ export class DiscussionEngine implements IDiscussionEngine {
         }
       }
 
-      this.state.status = this.state.stopReason || engineSignal.aborted ? EngineState.CANCELLED : EngineState.COMPLETED;
+      let status: EngineState;
+      if (this.state.stopReason) {
+        status = EngineState.CANCELLED;
+      } else if (engineSignal.aborted) {
+        status = EngineState.CANCELLED;
+      } else {
+        status = EngineState.COMPLETED;
+      }
+      this.state.status = status;
+
       const conclusion = await this.safeGenerateConclusion();
 
       return buildResult(conclusion);
@@ -181,7 +190,14 @@ export class DiscussionEngine implements IDiscussionEngine {
            return await this.executeAgent(name, roundContext, effectiveSignal);
         } catch (e) {
            if (this.isAbortLike(e)) return null;
-           errors.push({ agent: name, round: this.state.currentRound, message: e instanceof Error ? e.message : String(e) });
+           const errorObj = e instanceof Error ? e : new Error(String(e));
+           errors.push({ 
+             agent: name, 
+             round: this.state.currentRound, 
+             message: errorObj.message,
+             code: (errorObj as any).code,
+             retryCount: (errorObj as any).retryCount,
+           });
            await this.logger.error(`Error executing agent ${name}`, e);
            return null;
         }
@@ -486,13 +502,28 @@ ${context}
      if ((AbortSignal as any).any) {
        return (AbortSignal as any).any(active) as AbortSignal;
      }
+     
      const controller = new AbortController();
-     const onAbort = () => controller.abort();
+     const onAbort = (evt: Event) => {
+        const reason = (evt.target as AbortSignal).reason;
+        controller.abort(reason);
+     };
+
+     // Clean up listeners when combined signal is aborted
+     const cleanup = () => {
+        controller.signal.removeEventListener('abort', cleanup);
+        for (const sig of active) {
+            sig.removeEventListener('abort', onAbort);
+        }
+     };
+     controller.signal.addEventListener('abort', cleanup);
+
      for (const sig of active) {
-       sig.addEventListener('abort', onAbort);
-       if (sig.aborted && !controller.signal.aborted) {
-         controller.abort((sig as any).reason);
+       if (sig.aborted) {
+         controller.abort(sig.reason);
+         return controller.signal;
        }
+       sig.addEventListener('abort', onAbort, { once: true });
      }
      return controller.signal;
    }
