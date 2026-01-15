@@ -34,20 +34,44 @@ npm install -g opencode-group-discuss
     "advocate": {
       "description": "倡导者，提出并支持观点",
       "mode": "subagent",
-      "prompt": "你是辩论中的正方/倡导者。你的任务是提出论点并支持特定观点。",
+      "prompt": "正方/倡导者：按结构输出 主张/论据/收益/代价/风险与应对/回应反方/假设与待确认项。",
       "temperature": 0.7
     },
     "critic": {
       "description": "批评者，质疑和挑战观点",
       "mode": "subagent",
-      "prompt": "你是辩论中的反方/批评者。你的任务是质疑观点、指出问题、提供反例。",
+      "prompt": "反方/批评者：按结构输出 关键反对点/逻辑漏洞/失败模式/安全与合规/运维与成本/必要约束/替代方案。",
       "temperature": 0.6
     },
     "moderator": {
       "description": "主持人，评估并裁决",
       "mode": "subagent",
-      "prompt": "你是辩论的主持人/裁判。综合双方论述，做出公正的评判和总结。",
+      "prompt": "裁判/主持人：必须输出 Verdict + Constraint List(Must-Haves/Must-Nots/Trade-offs) + Risks & Mitigations + Open Questions + Next Steps，并在最后追加一个 JSON 指令集供 Main Agent 落地。",
       "temperature": 0.3
+    },
+    "summarizer": {
+      "description": "总结者/记录员 - 压缩并提炼讨论要点",
+      "mode": "subagent",
+      "prompt": "输出 Context Pack：Background/Key Arguments(正反)/Decisions/Constraints/Open Questions，供后续阶段直接复用。",
+      "temperature": 0.2
+    },
+    "researcher": {
+      "description": "前期调研员/Researcher - Web research",
+      "mode": "subagent",
+      "prompt": "先做网络调研并输出 Research Brief（含 Sources/关键事实/风险与约束/待确认问题），为后续辩论提供事实依据。",
+      "temperature": 0.2
+    },
+    "bridge": {
+      "description": "桥接者/PO - 战略决策转技术规格",
+      "mode": "subagent",
+      "prompt": "把裁决 + 约束清单转译为 Tech Spec（Goals/Non-Goals/API 边界/数据模型/验收标准/实现清单）。",
+      "temperature": 0.2
+    },
+    "reviewer": {
+      "description": "审计者/Reviewer - 对照约束清单验收",
+      "mode": "subagent",
+      "prompt": "对照 Constraint List 审计 Tech Spec/设计：逐条 PASS/FAIL/UNKNOWN + 证据 + 修复建议，并补齐最小验收测试建议。",
+      "temperature": 0.2
     }
   },
   

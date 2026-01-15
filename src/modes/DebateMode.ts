@@ -55,10 +55,23 @@ export class DebateMode implements DiscussionMode {
     messages: DiscussionMessage[],
     topic: string
   ): Promise<string> {
-    // 尝试寻找最后一位发言者的总结（通常是裁判或主持人）
     if (messages.length === 0) return "讨论未产生有效内容。";
-    const lastMsg = messages[messages.length - 1];
-    return `【最终结论】\n${lastMsg.content}`;
+
+    // 找最后一轮的 moderator 发言作为结论
+    const lastRound = Math.max(...messages.map(m => m.round));
+    const moderatorMsg = messages.find(
+      m => m.round === lastRound &&
+           (m.agent.toLowerCase().includes('moderator') ||
+            m.agent.includes('主持') ||
+            m.agent.includes('裁判'))
+    );
+
+    if (moderatorMsg) {
+      return moderatorMsg.content;
+    }
+
+    // 兜底：取最后一条消息
+    return messages[messages.length - 1].content;
   }
 
   calculateConsensus(messages: DiscussionMessage[]): number {

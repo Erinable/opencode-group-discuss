@@ -169,8 +169,6 @@ export class DiscussionEngine implements IDiscussionEngine {
 
     await this.logger.debug(`Round ${this.state.currentRound} speakers: ${speakers.join(', ')}`);
 
-    const roundContext = await this.buildContext();
-    const results: (DiscussionMessage | null)[] = [];
     const errors = this.state.errors ?? (this.state.errors = []);
 
     // Dispatch tasks in parallel (controlled by ResourceController)
@@ -187,7 +185,7 @@ export class DiscussionEngine implements IDiscussionEngine {
         }
         
         try {
-           return await this.executeAgent(name, roundContext, effectiveSignal);
+           return await this.executeAgent(name, effectiveSignal);
         } catch (e) {
            if (this.isAbortLike(e)) return null;
            const errorObj = e instanceof Error ? e : new Error(String(e));
@@ -220,10 +218,12 @@ export class DiscussionEngine implements IDiscussionEngine {
     }
   }
 
-  private async executeAgent(name: string, context: string, signal?: AbortSignal): Promise<DiscussionMessage> {
+  private async executeAgent(name: string, signal?: AbortSignal): Promise<DiscussionMessage> {
     const participant = this.state.participants.find(p => p.name === name) || 
                         ({ name, subagentType: 'general' } as DiscussionParticipant);
 
+    // 为该 Agent 构建增量上下文（只包含上一轮其他人的发言）
+    const context = await this.buildContextForAgent(name);
     const prompt = this.buildPromptForAgent(name, participant, context);
     const engineSignal = signal ?? this.abortController.signal;
     
@@ -251,52 +251,73 @@ export class DiscussionEngine implements IDiscussionEngine {
     };
   }
 
-  private async buildContext(): Promise<string> {
-    // Initial Context
-    if (this.state.messages.length === 0) {
-      let initialContext = "【讨论背景】\n";
-      initialContext += `话题: ${this.state.topic}\n`;
+  /**
+   * 构建初始背景信息（仅首轮使用）
+   * 包含：话题、补充背景、参与成员、参考文件
+   */
+  private async buildInitialBackground(): Promise<string> {
+    let context = "【讨论背景】\n";
+    context += `话题: ${this.state.topic}\n`;
 
-      if (this.options.context) {
-        initialContext += `补充背景: ${this.options.context}\n`;
-      }
-
-      if (this.state.participants.length) {
-        initialContext += "\n【参与成员】\n";
-        for (const p of this.state.participants) {
-          const role = p.role ? ` | role=${p.role}` : "";
-          initialContext += `- @${p.name} | subagent_type=${p.subagentType}${role}\n`;
-        }
-      }
-
-      if (this.options.files && this.options.files.length > 0) {
-        initialContext += "\n【参考文件内容】\n";
-        for (const file of this.options.files) {
-          try {
-            const resolved = path.isAbsolute(file)
-              ? file
-              : path.resolve(process.cwd(), file);
-            // Async Read
-            const content = await AsyncFS.readFile(resolved);
-            initialContext += `\n--- 文件: ${file} ---\n${content}\n`;
-          } catch (e) {
-            await this.logger.warn(`无法读取文件 ${file}: ${e instanceof Error ? e.message : String(e)}`);
-          }
-        }
-      }
-      return initialContext;
+    if (this.options.context) {
+      context += `补充背景: ${this.options.context}\n`;
     }
 
-    // Compression/Summarization Logic (Phase 3 Todo, currently keeping logic simple)
-    // Using simple concatenation or existing summarization
-    const COMPRESSION_THRESHOLD = 15;
-    if (this.state.messages.length > COMPRESSION_THRESHOLD) {
-      return await this.summarizeHistory();
+    if (this.state.participants.length) {
+      context += "\n【参与成员】\n";
+      for (const p of this.state.participants) {
+        const role = p.role ? ` | role=${p.role}` : "";
+        context += `- @${p.name} | subagent_type=${p.subagentType}${role}\n`;
+      }
     }
 
-    return this.state.messages
-      .map((m) => `Round ${m.round} | @${m.agent}: ${m.content}`)
-      .join("\n\n");
+    if (this.options.files && this.options.files.length > 0) {
+      context += "\n【参考文件内容】\n";
+      for (const file of this.options.files) {
+        try {
+          const resolved = path.isAbsolute(file)
+            ? file
+            : path.resolve(process.cwd(), file);
+          const content = await AsyncFS.readFile(resolved);
+          context += `\n--- 文件: ${file} ---\n${content}\n`;
+        } catch (e) {
+          await this.logger.warn(`无法读取文件 ${file}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+
+    return context;
+  }
+
+  /**
+   * 为指定 Agent 构建增量上下文
+   * - Round 1：返回完整背景
+   * - Round 2+：只返回上一轮其他人的发言
+   */
+  private async buildContextForAgent(agentName: string): Promise<string> {
+    const currentRound = this.state.currentRound;
+
+    // 首轮：返回初始背景
+    if (currentRound === 1) {
+      return await this.buildInitialBackground();
+    }
+
+    // Round 2+：返回上一轮其他人的发言
+    const prevRound = currentRound - 1;
+    const otherSpeakers = this.state.messages.filter(
+      m => m.round === prevRound && m.agent !== agentName
+    );
+
+    if (otherSpeakers.length === 0) {
+      return `话题: ${this.state.topic}\n（上一轮暂无其他人发言）`;
+    }
+
+    let context = `【第 ${prevRound} 轮其他成员发言】\n`;
+    for (const m of otherSpeakers) {
+      context += `\n@${m.agent}:\n${m.content}\n`;
+    }
+
+    return context;
   }
 
   private buildPromptForAgent(name: string, participant: DiscussionParticipant, context: string): string {
@@ -424,20 +445,6 @@ ${context}
     return this.sessionID;
   }
 
-
-  private async summarizeHistory(): Promise<string> {
-    const history = this.state.messages
-      .map((m) => `@${m.agent}: ${m.content}`)
-      .join("\n");
-    const prompt = `总结论点：\n${history}`;
-    
-    // Summarize also needs retry
-    return await withRetry((signal) => this.invokeDirect("summarizer", prompt, this.sessionID, { signal, timeoutMs: this.options.timeout }), {
-      retries: this.options.maxRetries,
-      signal: this.abortController.signal,
-    });
-  }
- 
    private async cleanup(): Promise<void> {
      if (this.cleanupPromise) return this.cleanupPromise;
  

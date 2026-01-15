@@ -1,9 +1,9 @@
 /**
  * OpenCode Group Discuss Plugin
- * 
+ *
  * Enables multi-agent group discussions in OpenCode
- * 
- * @see https://github.com/yourusername/opencode-group-discuss
+ *
+ * @see https://github.com/opencode-ai/opencode-group-discuss
  */
 
 import type { Plugin } from "@opencode-ai/plugin";

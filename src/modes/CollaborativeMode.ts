@@ -29,14 +29,16 @@ export class CollaborativeMode implements DiscussionMode {
   }
 
   /**
-   * 结论是所有人共同设计的结晶
+   * 结论只取最后一轮的共识
    */
   async generateConclusion(messages: DiscussionMessage[], topic: string): Promise<string> {
     if (messages.length === 0) return "未达成有效方案。";
-    
-    // 在协作模式下，结论通常需要对整个过程进行汇总
-    return `【协作产出方案】\n针对话题“${topic}”，团队经过多轮协作，达成了以下共识方案：\n\n` + 
-           messages.map(m => `[@${m.agent}]: ${m.content}`).join("\n---\n");
+
+    const lastRound = Math.max(...messages.map(m => m.round));
+    const finalMessages = messages.filter(m => m.round === lastRound);
+
+    return `【协作产出方案】\n针对话题"${topic}"，团队达成以下共识：\n\n` +
+           finalMessages.map(m => `[@${m.agent}]: ${m.content}`).join("\n\n");
   }
 
   calculateConsensus(messages: DiscussionMessage[]): number {

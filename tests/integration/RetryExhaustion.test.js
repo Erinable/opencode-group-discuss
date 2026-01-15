@@ -7,13 +7,16 @@ import { MockAgentClient } from './MockAgentClient.js';
 test('DiscussionEngine Integration: Retry Exhaustion', async (t) => {
   const client = new MockAgentClient();
   const engine = new DiscussionEngine(client, 'root-session');
-  
+
   // Override prompt to always fail
-  client.session.prompt = async (args) => {
-      console.log('Failing prompt called');
-      // Return error to simulate 500
-      throw new Error('Internal Server Error 500');
+  // Note: Must override both since session.prompt is bound in constructor
+  const failingPrompt = async (args) => {
+    console.log('Failing prompt called');
+    // Return error to simulate 500
+    throw new Error('Internal Server Error 500');
   };
+  client.prompt = failingPrompt;
+  client.session.prompt = failingPrompt;
 
   await engine.init({
     topic: 'Retry Topic',
@@ -25,14 +28,14 @@ test('DiscussionEngine Integration: Retry Exhaustion', async (t) => {
   });
 
   try {
-      await engine.run();
+    await engine.run();
   } catch (e) {
-      // It might throw depending on how engine handles fatal round errors
+    // It might throw depending on how engine handles fatal round errors
   }
-  
+
   const state = engine.getState();
   const errors = state.errors || [];
-  
+
   assert.ok(errors.length > 0, 'Should have errors');
   // Check if we have the right error info
   // The error message should come from the last retry attempt
