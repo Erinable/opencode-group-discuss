@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-01-15
+
+### Added
+- **Test Coverage**: Increased from 8 to 42 tests (+425%)
+  - `DebateMode.test.js` - speaker ordering, consensus detection
+  - `CollaborativeMode.test.js` - collaborative mode logic
+  - `DiscussionFacade.test.js` - input validation, normalization
+  - `withRetry.test.js` - retry mechanism, bail conditions
+- **npm test script**: Added `test` script to `package.json`
+
+### Changed
+- **CI Workflow**: Updated to use `npm test` instead of hardcoded file list
+- **MockAgentClient**: Improved to support dynamic prompt override for testing
+
+### Fixed
+- Fixed repository URL placeholder in `package.json` and `src/index.ts`
+
 ## [0.3.0] - 2026-01-05
 
 ### 🚨 Breaking Changes
