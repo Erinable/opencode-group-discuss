@@ -1,6 +1,6 @@
 {
   "name": "opencode-group-discuss",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Multi-agent group discussion plugin for OpenCode - enables AI agents to debate and collaborate",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
