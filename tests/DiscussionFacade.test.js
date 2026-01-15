@@ -91,3 +91,43 @@ test('DiscussionFacade.transform: uses specified agents', async (t) => {
     const names = result.participants.map(p => p.name);
     assert.deepStrictEqual(names, ['advocate', 'critic']);
 });
+
+// Edge case tests
+test('DiscussionFacade.transform: throws on empty topic', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({ topic: '' });
+    }, /Topic cannot be empty/);
+});
+
+test('DiscussionFacade.transform: throws on rounds = 0', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({ topic: 'Test', rounds: 0 });
+    }, /Rounds must be at least 1/);
+});
+
+test('DiscussionFacade.transform: throws on negative rounds', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({ topic: 'Test', rounds: -5 });
+    }, /Rounds must be at least 1/);
+});
+
+test('DiscussionFacade.transform: throws on empty participant name', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({
+            topic: 'Test',
+            participants: [{ name: '', subagent_type: 'general' }]
+        });
+    }, /Participant name cannot be empty/);
+});
+
+test('DiscussionFacade.transform: throws on timeout too small', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({ topic: 'Test', timeout: 500 });
+    }, /Timeout must be at least 1000ms/);
+});
+
+test('DiscussionFacade.transform: throws on negative concurrency', async (t) => {
+    await assert.rejects(async () => {
+        await DiscussionFacade.transform({ topic: 'Test', concurrency: 0 });
+    }, /Concurrency must be at least 1/);
+});

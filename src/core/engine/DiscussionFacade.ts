@@ -4,24 +4,24 @@ import { DiscussionParticipant } from '../../types/index.js';
 import { AgentRegistry } from './AgentRegistry.js';
 
 const ParticipantInputSchema = z.object({
-  name: z.string(),
-  subagent_type: z.string().default('general'),
+  name: z.string().min(1, 'Participant name cannot be empty'),
+  subagent_type: z.string().min(1).default('general'),
   role: z.string().optional()
 });
 
 const InputSchema = z.object({
-  topic: z.string(),
-  agents: z.array(z.string()).optional(),
+  topic: z.string().min(1, 'Topic cannot be empty'),
+  agents: z.array(z.string().min(1)).optional(),
   participants: z.array(ParticipantInputSchema).optional(),
   mode: z.enum(['debate', 'collaborative']).default('debate'),
-  rounds: z.number().min(1).max(10).default(3),
+  rounds: z.number().int().min(1, 'Rounds must be at least 1').max(10, 'Rounds cannot exceed 10').default(3),
   verbose: z.boolean().default(true),
   context: z.string().optional(),
   files: z.array(z.string()).optional(),
   keep_sessions: z.boolean().default(false),
-  maxRetries: z.number().default(3),
-  timeout: z.number().default(600000), // 10 minutes
-  concurrency: z.number().default(2) // Default to 2 for better performance
+  maxRetries: z.number().int().min(0, 'maxRetries cannot be negative').default(3),
+  timeout: z.number().int().min(1000, 'Timeout must be at least 1000ms').default(600000),
+  concurrency: z.number().int().min(1, 'Concurrency must be at least 1').default(2)
 });
 
 export class DiscussionFacade {
@@ -31,7 +31,7 @@ export class DiscussionFacade {
     if (!result.success) {
       throw new Error(`Invalid configuration: ${result.error.message}`);
     }
-    
+
     const data = result.data;
     const knownAgentIDs = await AgentRegistry.getAgentIDs();
 
@@ -50,7 +50,7 @@ export class DiscussionFacade {
       const invalidTypes = data.participants
         .map(p => p.subagent_type)
         .filter(t => !knownAgentIDs.has(t));
-        
+
       if (invalidTypes.length > 0) {
          const uniq = Array.from(new Set(invalidTypes));
          throw new Error(
@@ -62,7 +62,7 @@ export class DiscussionFacade {
     // 3. Determine final participants list
     // If no agents and no participants provided, use defaults based on mode
     let inputAgentIDs: string[] = [];
-    
+
     if ((!data.agents || data.agents.length === 0) && (!data.participants || data.participants.length === 0)) {
        inputAgentIDs = this.getDefaultAgents(data.mode);
     } else {
@@ -114,10 +114,10 @@ export class DiscussionFacade {
       concurrency: data.concurrency
     };
    }
- 
+
    private static normalizeInput(input: any) {
      const normalized: any = { ...input };
- 
+
      if (Array.isArray(normalized.participants)) {
        normalized.participants = normalized.participants.map((p: any) => {
          const subagent_type = p?.subagent_type ?? p?.subagentType ?? 'general';
@@ -127,18 +127,18 @@ export class DiscussionFacade {
          };
        });
      }
- 
+
      if (normalized.keep_sessions === undefined && normalized.keepSessions !== undefined) {
        normalized.keep_sessions = normalized.keepSessions;
      }
- 
+
      if (normalized.rounds === undefined && typeof normalized.maxRounds === 'number') {
        normalized.rounds = normalized.maxRounds;
      }
- 
+
      return normalized;
    }
- 
+
    private static getDefaultAgents(mode: string): string[] {
      switch (mode) {
 
