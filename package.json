@@ -12,8 +12,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "MIGRATION.md"
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
