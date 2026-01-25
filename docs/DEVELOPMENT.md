@@ -49,6 +49,13 @@ opencode-group-discuss/
 - **p-queue**: 并发控制
 - **async-retry**: 网络请求重试
 
+## 安全注意事项
+
+- `group_discuss.files` 仅允许读取项目根目录内文件（`realpath` 边界校验，拒绝 symlink 逃逸）。
+- 超限会 fail-closed：maxFiles=10、maxBytesPerFile=256KiB、maxTotalBytes=1MiB。
+- `group_discuss(diagnose=true)` 的环境变量输出为 `[SET]/[NOT SET]`，不会打印实际值。
+- Logger 会对 token-like 内容做基础脱敏；但 debug 模式仍可能包含业务上下文。
+
 ## 核心架构
 
 ### 1. DiscussionEngine

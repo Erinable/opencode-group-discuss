@@ -191,6 +191,11 @@ Build Agent: 好的，我来启动一个群聊讨论。
 
 让 Agent 读取本地文件进行讨论。
 
+安全说明：
+- `files` 仅允许读取项目根目录内的文件（会做 `realpath` 边界校验，防止 symlink 逃逸）。
+- 不允许读取项目根目录之外的绝对路径。
+- 限制：最多 10 个文件；单文件最大 256 KiB；总计最大 1 MiB（超出会直接失败）。
+
 ```json
 {
   "topic": "审查当前 Auth 模块的安全性",
@@ -312,6 +317,11 @@ Build Agent: 好的，我来启动一个群聊讨论。
   }
 }
 ```
+
+日志/诊断安全说明：
+- `diagnose=true` 的环境变量输出为 presence-only（`[SET]` / `[NOT SET]`），不会打印实际值。
+- 日志会对 token-like 内容做基础脱敏（Bearer/JWT/sk-*/querystring secret）。
+- 开启 debug 级别日志仍可能包含 prompt/context 的业务内容，请谨慎用于包含敏感信息的项目。
 
 ### 预设使用示例
 
