@@ -21,9 +21,16 @@ The project has transitioned from a monolithic prototype to a robust, component-
 *   **Refactor**: Split `Discussion.ts` into `DiscussionEngine` + `ResourceController`.
 *   **Node 20+**: Adoption of `AbortSignal.any` for leak-free signal combination.
 *   **Robustness**: Standardized error codes (`ETIMEDOUT`, etc.) and reliable retry logic.
-*   **DX**: Added `docs/MIGRATION.md` and integration tests.
+*   **DX**: Added integration tests and expanded documentation.
 
 ## Future Roadmap
 *   **Phase 4**: Advanced Modes (Brainstorming).
 *   **Phase 5**: Persistence & Replay (Save discussion state to file).
 *   **Optimization**: Context window compression for long discussions.
+
+## Docs Index
+- Install & usage overview: `../README.md`
+- Quickstart: `QUICKSTART.md`
+- Config reference: `CONFIG.md`
+- Architecture: `ARCHITECTURE.md`
+- Development: `DEVELOPMENT.md`

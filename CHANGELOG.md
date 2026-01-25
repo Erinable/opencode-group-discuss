@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool Help Support**: Added `help=true` to all tools for interactive self-documentation.
 
 ### Changed
-- **Documentation Reorganization**: Moved technical docs to `docs/` and added `QUICKSTART.md`, `DEVELOPMENT.md`, and `MIGRATION.md`.
+- **Documentation Reorganization**: Moved technical docs to `docs/` and added `QUICKSTART.md` and `DEVELOPMENT.md`.
 - **Improved Tooling**: Enhanced `group_discuss` to better handle duplicate agent names and report errors more clearly.
 
 ### Fixed

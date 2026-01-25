@@ -58,28 +58,11 @@ opencode-group-discuss/
 
 ## 核心架构
 
-### 1. DiscussionEngine
-引擎主类，负责：
-- 维护讨论状态 (`IDiscussionState`)
-- 执行 Run Loop (`runRound`)
-- 生成最终结论 (`generateConclusion`)
-- 统一错误处理 (`DiscussionError` with `code/cause`)
+架构与数据流说明已迁移到：
 
-### 2. ResourceController (Dispatcher)
-负责并发任务管理：
-- `dispatch()`: 包装任务，注入 `AbortSignal`，处理超时
-- `shutdown()`: 双阶段停机
-    1. **Reject New**: 拒绝新任务 (`E_SHUTTING_DOWN`)
-    2. **Drain**: 等待 `onIdle()` (默认 30s 超时)
-    3. **Cleanup**: 强制 abort 剩余任务
+- `ARCHITECTURE.md`
 
-### 3. Graceful Shutdown 生命周期
-当用户调用 `stop()` 或系统退出时：
-1. `DiscussionEngine.stop()` 触发 `abortController.abort()`。
-2. 运行中的任务接收到 signal，尽快清理退出。
-3. `run().finally` 块调用 `cleanup()`。
-4. `cleanup()` 调用 `ResourceController.shutdown({ awaitIdle: true })`，等待队列排干。
-5. 删除所有子 Session。
+本文件（DEVELOPMENT）聚焦本地开发、调试、发布与贡献工作流，避免与架构文档重复导致过期。
 
 ## 错误处理标准
 
