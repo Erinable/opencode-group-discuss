@@ -369,10 +369,11 @@ ${presetsInfo}
 
         // 创建讨论实例
         // 注意：ToolContext 不包含 callTool，我们只使用 client 的标准 API
+        // agents 应该传已注册的 agent key 列表（inputAgentIDs），而不是参与者显示名称
         const discussion = new Discussion(
           {
             topic,
-            agents: participantNames,
+            agents: inputAgentIDs,
             participants: participantConfigs,
             mode: getModeInstance(mode),
             maxRounds: rounds,

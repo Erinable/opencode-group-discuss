@@ -69,11 +69,19 @@ export class DiscussionFacade {
        inputAgentIDs = data.agents || [];
     }
 
-    const registeredConfigs = inputAgentIDs.map(id => ({
-      name: id,
-      subagentType: id,
-      role: undefined
-    }));
+    // Auto-suffix duplicate agent names to ensure uniqueness
+    // e.g., ["general", "general", "general"] => ["general", "general-2", "general-3"]
+    const nameCount = new Map<string, number>();
+    const registeredConfigs = inputAgentIDs.map(id => {
+      const count = (nameCount.get(id) || 0) + 1;
+      nameCount.set(id, count);
+      const name = count === 1 ? id : `${id}-${count}`;
+      return {
+        name,
+        subagentType: id,
+        role: undefined
+      };
+    });
 
     const tempConfigs = (data.participants || []).map(p => ({
       name: p.name,

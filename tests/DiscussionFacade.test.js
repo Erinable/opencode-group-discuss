@@ -131,3 +131,17 @@ test('DiscussionFacade.transform: throws on negative concurrency', async (t) => 
         await DiscussionFacade.transform({ topic: 'Test', concurrency: 0 });
     }, /Concurrency must be at least 1/);
 });
+
+test('DiscussionFacade.transform: auto-suffixes duplicate agent names', async (t) => {
+    const result = await DiscussionFacade.transform({
+        topic: 'Test',
+        agents: ['general', 'general', 'general']
+    });
+
+    const names = result.participants.map(p => p.name);
+    assert.deepStrictEqual(names, ['general', 'general-2', 'general-3']);
+    
+    // All should use the same subagentType
+    const types = result.participants.map(p => p.subagentType);
+    assert.deepStrictEqual(types, ['general', 'general', 'general']);
+});
