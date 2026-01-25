@@ -63,6 +63,12 @@ test('DiscussionEngine Integration: Timeout', async (t) => {
   client.prompt = async (args) => {
       const { signal } = args;
       return new Promise((resolve, reject) => {
+          if (signal?.aborted) {
+              const e = new Error('Aborted');
+              e.name = 'AbortError';
+              reject(e);
+              return;
+          }
           const t = setTimeout(() => resolve("slow"), 200);
           if (signal) {
               signal.addEventListener('abort', () => {

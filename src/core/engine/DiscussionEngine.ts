@@ -31,6 +31,8 @@ export class DiscussionEngine implements IDiscussionEngine {
   private modeInstance!: any; // DiscussionMode interface
   private abortController!: AbortController;
   private cleanupPromise?: Promise<void>;
+
+  private initialFilesBlock?: string;
   
   // P0: 新增共识评估器和终止管理器
   private consensusEvaluator!: ConsensusEvaluator;
@@ -72,6 +74,46 @@ export class DiscussionEngine implements IDiscussionEngine {
     // 加载配置文件中的共识和终止配置
     const configLoader = getConfigLoader();
     const fileConfig = await configLoader.loadConfig();
+
+    // P0: fail-closed sandboxing for files[] before any sub-sessions are created
+    if (this.options.files && this.options.files.length > 0) {
+      const projectRoot = configLoader.getProjectRoot();
+      const MAX_FILES = 10;
+      const MAX_BYTES_PER_FILE = 262144; // 256 KiB
+      const MAX_TOTAL_BYTES = 1048576; // 1 MiB
+
+      if (this.options.files.length > MAX_FILES) {
+        const err: any = new Error(`E_FILE_TOO_MANY: maxFiles=${MAX_FILES}`);
+        err.code = 'E_FILE_TOO_MANY';
+        throw err;
+      }
+
+      let totalBytes = 0;
+      let block = "\n【参考文件内容】\n";
+
+      for (const file of this.options.files) {
+        const resolved = await AsyncFS.safeResolve(projectRoot, file);
+        const st = await AsyncFS.stat(resolved);
+
+        if (st.size > MAX_BYTES_PER_FILE) {
+          const err: any = new Error(`E_FILE_TOO_LARGE: ${file} maxBytesPerFile=${MAX_BYTES_PER_FILE}`);
+          err.code = 'E_FILE_TOO_LARGE';
+          throw err;
+        }
+
+        totalBytes += st.size;
+        if (totalBytes > MAX_TOTAL_BYTES) {
+          const err: any = new Error(`E_FILE_TOTAL_TOO_LARGE: maxTotalBytes=${MAX_TOTAL_BYTES}`);
+          err.code = 'E_FILE_TOTAL_TOO_LARGE';
+          throw err;
+        }
+
+        const content = await AsyncFS.readFile(resolved);
+        block += `\n--- 文件: ${file} ---\n${content}\n`;
+      }
+
+      this.initialFilesBlock = block;
+    }
     
     // P0: 初始化共识评估器（合并配置文件 + mode 提供的配置）
     const modeConsensusConfig = this.modeInstance.getConsensusConfig?.() ?? {};
@@ -379,19 +421,8 @@ export class DiscussionEngine implements IDiscussionEngine {
       }
     }
 
-    if (this.options.files && this.options.files.length > 0) {
-      context += "\n【参考文件内容】\n";
-      for (const file of this.options.files) {
-        try {
-          const resolved = path.isAbsolute(file)
-            ? file
-            : path.resolve(process.cwd(), file);
-          const content = await AsyncFS.readFile(resolved);
-          context += `\n--- 文件: ${file} ---\n${content}\n`;
-        } catch (e) {
-          await this.logger.warn(`无法读取文件 ${file}: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      }
+    if (this.initialFilesBlock) {
+      context += this.initialFilesBlock;
     }
 
     return context;
