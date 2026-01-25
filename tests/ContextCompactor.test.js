@@ -26,6 +26,8 @@ test('ContextCompactor: returns raw context when under threshold', async () => {
     });
 
     assert.strictEqual(result.wasCompacted, false);
+    assert.strictEqual(result.compressionRatio, 1);
+    assert.strictEqual(result.originalLength, result.compactedLength);
     assert.ok(result.content.includes('第 1 轮'));
 });
 

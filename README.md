@@ -22,6 +22,8 @@
 npm install -g opencode-group-discuss
 ```
 
+你可以用 `group_discuss_context` 查看当前生效的预算与推导后的字符上限（便于端到端调试/断言）。
+
 ## 🚀 快速开始
 
 ### 1. 配置 Agents
@@ -264,10 +266,20 @@ Build Agent: 好的，我来启动一个群聊讨论。
   },
 
   // 上下文压缩配置
+  // 推荐：用 context_budget 管理预算，避免手填字符数
+  "context_budget": {
+    "profile": "balanced",             // small | balanced | large
+    "input_tokens": 6000,               // 注入上下文的 token 预算
+    "min_output_tokens": 512,           // 预留给模型输出的 token
+    "reasoning_headroom_tokens": 0,     // 预留给推理 token（按模型需要调整）
+    "chars_per_token": 4                // 估算换算（英文常用 4；CJK 可调小）
+  },
+
+  // 上下文压缩配置
   "context_compaction": {
-    "max_context_chars": 32000,          // 最大上下文字符数
+    "max_context_chars": "auto",        // 最大上下文字符数（auto 由 context_budget 推导）
     "compaction_threshold": 0.8,         // 压缩触发阈值
-    "max_message_length": 500,           // 每条消息最大保留字符数
+    "max_message_length": "auto",       // 每条消息最大保留字符数（auto 由 profile 推导）
     "preserve_recent_rounds": 1,         // 保留最近 N 轮完整发言
     "enable_key_info_extraction": true,  // 启用关键信息提取
     "include_self_history": false        // 是否包含当前 agent 的历史发言

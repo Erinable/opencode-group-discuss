@@ -92,11 +92,11 @@ export interface TerminationConfigOverride {
  */
 export interface ContextCompactionConfigOverride {
   /** Maximum context character count */
-  max_context_chars?: number;
+  max_context_chars?: number | 'auto';
   /** Compaction trigger threshold (0-1) */
   compaction_threshold?: number;
   /** Max characters per message */
-  max_message_length?: number;
+  max_message_length?: number | 'auto';
   /** Preserve full messages in last N rounds */
   preserve_recent_rounds?: number;
   /** Enable key info extraction */
@@ -106,6 +106,45 @@ export interface ContextCompactionConfigOverride {
 
   /** Include current agent's own history in injected context */
   include_self_history?: boolean;
+}
+
+/**
+ * Resolved context compaction configuration.
+ * All derived values are concrete numbers.
+ */
+export interface ResolvedContextCompactionConfig {
+  max_context_chars: number;
+  compaction_threshold: number;
+  max_message_length: number;
+  preserve_recent_rounds: number;
+  enable_key_info_extraction: boolean;
+  keyword_weights: Record<string, number>;
+  include_self_history: boolean;
+}
+
+export type ContextBudgetProfile = 'small' | 'balanced' | 'large';
+
+/**
+ * Token-based context budgeting.
+ *
+ * Goal: avoid forcing users to guess character limits.
+ * This budget applies to the injected discussion context (not the entire model prompt).
+ */
+export interface ContextBudgetConfigOverride {
+  /** Preset budget profile */
+  profile?: ContextBudgetProfile;
+
+  /** Explicit input token budget for injected context (overrides profile) */
+  input_tokens?: number;
+
+  /** Reserved tokens for the model output */
+  min_output_tokens?: number;
+
+  /** Reserved tokens for hidden reasoning (for reasoning models) */
+  reasoning_headroom_tokens?: number;
+
+  /** Heuristic conversion used when tokenizer is unavailable */
+  chars_per_token?: number;
 }
 
 /**
@@ -170,6 +209,9 @@ export interface GroupDiscussConfig {
   /** Context compaction configuration */
   context_compaction?: ContextCompactionConfigOverride;
 
+  /** Token-based context budget (recommended over raw char limits) */
+  context_budget?: ContextBudgetConfigOverride;
+
   /** Logging configuration */
   logging?: LoggingConfigOverride;
 
@@ -186,6 +228,7 @@ export const DEFAULT_CONFIG: {
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
   context_compaction: Required<ContextCompactionConfigOverride>;
+  context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
 } = {
@@ -212,13 +255,21 @@ export const DEFAULT_CONFIG: {
     disabled_conditions: [],
   },
   context_compaction: {
-    max_context_chars: 32000,
+    max_context_chars: 'auto',
     compaction_threshold: 0.8,
-    max_message_length: 500,
+    max_message_length: 'auto',
     preserve_recent_rounds: 1,
     enable_key_info_extraction: true,
     keyword_weights: {},
     include_self_history: false,
+  },
+
+  context_budget: {
+    profile: 'balanced',
+    input_tokens: 6000,
+    min_output_tokens: 512,
+    reasoning_headroom_tokens: 0,
+    chars_per_token: 4,
   },
 
   logging: {

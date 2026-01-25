@@ -115,6 +115,9 @@ export class DiscussionEngine implements IDiscussionEngine {
       terminationConditions: this.terminationManager.getConditionNames(),
       consensusThreshold: mergedConsensusConfig.consensusThreshold,
       contextCompactionThreshold: contextConfig.compaction_threshold,
+      contextBudget: fileConfig.context_budget,
+      maxContextChars: contextConfig.max_context_chars,
+      maxMessageLength: contextConfig.max_message_length,
     });
   }
 
@@ -419,8 +422,8 @@ export class DiscussionEngine implements IDiscussionEngine {
         agent: agentName,
         round: currentRound,
         wasCompacted: compacted.wasCompacted,
-        originalLength: compacted.originalLength,
-        compactedLength: compacted.compactedLength,
+        historyEstimatedLength: compacted.historyEstimatedLength ?? compacted.originalLength,
+        injectedLength: compacted.compactedLength,
         compressionRatio: compacted.compressionRatio,
         preservedKeyInfoCount: compacted.preservedKeyInfo?.length ?? 0,
         summary: compacted.summary?.progressOverview,

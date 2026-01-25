@@ -15,6 +15,9 @@ import type {
   ConsensusConfigOverride,
   TerminationConfigOverride,
   ContextCompactionConfigOverride,
+  ResolvedContextCompactionConfig,
+  ContextBudgetConfigOverride,
+  ContextBudgetProfile,
   LoggingConfigOverride,
   DebugConfigOverride,
 } from './schema.js';
@@ -28,7 +31,8 @@ export interface ResolvedConfig {
   presets: Record<string, DiscussionPreset>;
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
-  context_compaction: Required<ContextCompactionConfigOverride>;
+  context_compaction: ResolvedContextCompactionConfig;
+  context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
 }
@@ -126,7 +130,7 @@ export class ConfigLoader {
   /**
    * Get context compaction configuration
    */
-  async getContextCompactionConfig(): Promise<Required<ContextCompactionConfigOverride>> {
+  async getContextCompactionConfig(): Promise<ResolvedContextCompactionConfig> {
     const config = await this.loadConfig();
     return config.context_compaction;
   }
@@ -238,6 +242,14 @@ export class ConfigLoader {
         };
       }
 
+      // Merge context budget config
+      if (config.context_budget) {
+        result.context_budget = {
+          ...result.context_budget,
+          ...config.context_budget,
+        };
+      }
+
       // Merge logging config
       if (config.logging) {
         result.logging = {
@@ -263,6 +275,24 @@ export class ConfigLoader {
    */
   private resolveConfig(config: GroupDiscussConfig): ResolvedConfig {
     const defaultDefaults = DEFAULT_CONFIG.defaults;
+
+    const resolvedBudget = this.resolveContextBudget(config.context_budget);
+    const derivedMaxContextChars = this.deriveMaxContextChars(resolvedBudget);
+    const derivedMaxMessageLength = this.deriveMaxMessageLength(resolvedBudget);
+
+    const rawMaxContextChars = config.context_compaction?.max_context_chars;
+    const rawMaxMessageLength = config.context_compaction?.max_message_length;
+
+    const resolvedMaxContextChars =
+      typeof rawMaxContextChars === 'number'
+        ? rawMaxContextChars
+        : derivedMaxContextChars;
+
+    const resolvedMaxMessageLength =
+      typeof rawMaxMessageLength === 'number'
+        ? rawMaxMessageLength
+        : derivedMaxMessageLength;
+
     return {
       defaults: {
         mode: config.defaults?.mode ?? defaultDefaults.mode,
@@ -287,14 +317,16 @@ export class ConfigLoader {
         disabled_conditions: config.termination?.disabled_conditions ?? [],
       },
       context_compaction: {
-        max_context_chars: config.context_compaction?.max_context_chars ?? DEFAULT_CONFIG.context_compaction.max_context_chars,
+        max_context_chars: resolvedMaxContextChars,
         compaction_threshold: config.context_compaction?.compaction_threshold ?? DEFAULT_CONFIG.context_compaction.compaction_threshold,
-        max_message_length: config.context_compaction?.max_message_length ?? DEFAULT_CONFIG.context_compaction.max_message_length,
+        max_message_length: resolvedMaxMessageLength,
         preserve_recent_rounds: config.context_compaction?.preserve_recent_rounds ?? DEFAULT_CONFIG.context_compaction.preserve_recent_rounds,
         enable_key_info_extraction: config.context_compaction?.enable_key_info_extraction ?? DEFAULT_CONFIG.context_compaction.enable_key_info_extraction,
         keyword_weights: config.context_compaction?.keyword_weights ?? {},
         include_self_history: config.context_compaction?.include_self_history ?? DEFAULT_CONFIG.context_compaction.include_self_history,
       },
+
+      context_budget: resolvedBudget,
 
       logging: {
         level: config.logging?.level ?? DEFAULT_CONFIG.logging.level,
@@ -312,6 +344,42 @@ export class ConfigLoader {
         log_compaction: config.debug?.log_compaction ?? DEFAULT_CONFIG.debug.log_compaction,
       },
     };
+  }
+
+  private resolveContextBudget(input?: ContextBudgetConfigOverride): Required<ContextBudgetConfigOverride> {
+    const profile = (input?.profile ?? DEFAULT_CONFIG.context_budget.profile) as ContextBudgetProfile;
+    const defaults = DEFAULT_CONFIG.context_budget;
+
+    return {
+      profile,
+      input_tokens: input?.input_tokens ?? defaults.input_tokens,
+      min_output_tokens: input?.min_output_tokens ?? defaults.min_output_tokens,
+      reasoning_headroom_tokens: input?.reasoning_headroom_tokens ?? defaults.reasoning_headroom_tokens,
+      chars_per_token: input?.chars_per_token ?? defaults.chars_per_token,
+    };
+  }
+
+  private deriveMaxContextChars(budget: Required<ContextBudgetConfigOverride>): number {
+    const charsPerToken = Number.isFinite(budget.chars_per_token) && (budget.chars_per_token as number) > 0
+      ? (budget.chars_per_token as number)
+      : 4;
+    const inputTokens = Math.max(0, Math.floor(budget.input_tokens as number));
+    const reserveOut = Math.max(0, Math.floor(budget.min_output_tokens as number));
+    const headroom = Math.max(0, Math.floor(budget.reasoning_headroom_tokens as number));
+    const available = Math.max(0, inputTokens - reserveOut - headroom);
+    // Hard floor to keep context useful even with aggressive budgets.
+    return Math.max(2000, Math.floor(available * charsPerToken));
+  }
+
+  private deriveMaxMessageLength(budget: Required<ContextBudgetConfigOverride>): number {
+    switch (budget.profile as ContextBudgetProfile) {
+      case 'small':
+        return 300;
+      case 'large':
+        return 800;
+      default:
+        return 500;
+    }
   }
 
   /**

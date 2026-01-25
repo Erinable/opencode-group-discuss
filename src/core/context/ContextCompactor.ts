@@ -64,7 +64,7 @@ export class ContextCompactor {
     if (currentRound <= 1) {
       const content = baseContext ?? '';
       this.updateState(content.length);
-      return this.createResult(content, false, [], undefined);
+      return this.createResult(content, false, [], undefined, content.length);
     }
 
     const historyMessages = messages
@@ -76,7 +76,10 @@ export class ContextCompactor {
       });
 
     const estimatedFullLength = this.estimateFullHistoryLength(historyMessages);
-    this.updateState(estimatedFullLength);
+    const baseLen = baseContext ? baseContext.length : 0;
+    const joinSep = baseContext && estimatedFullLength > 0 ? 2 : 0;
+    const historyEstimatedLength = baseLen + joinSep + estimatedFullLength;
+    this.updateState(historyEstimatedLength);
 
     const { recentMessages, olderMessages } = this.partitionMessages(historyMessages, currentRound);
     const recentHeader = this.buildRecentHeader(currentRound);
@@ -84,13 +87,15 @@ export class ContextCompactor {
     if (!this.shouldCompact(estimatedFullLength)) {
       const recentText = this.buildFullHistoryContext(recentMessages, recentHeader);
       const content = [baseContext, recentText].filter(Boolean).join('\n\n').trim();
-      return this.createResult(content, false, [], undefined);
+      // Not compacted: originalLength should reflect the actual injected content.
+      // Keep historyEstimatedLength for observability.
+      return this.createResult(content, false, [], undefined, historyEstimatedLength, content.length);
     }
 
     if (olderMessages.length === 0) {
       const recentText = this.buildFullHistoryContext(recentMessages, recentHeader);
       const content = [baseContext, recentText].filter(Boolean).join('\n\n').trim();
-      return this.createResult(content, false, [], undefined);
+      return this.createResult(content, false, [], undefined, historyEstimatedLength, content.length);
     }
 
     const summary = this.summarizeMessages(olderMessages, currentRound);
@@ -104,7 +109,7 @@ export class ContextCompactor {
     this.state.lastCompactionTime = Date.now();
     this.state.historicalSummaries.push(summary);
 
-    return this.createResult(compacted, true, keyInfos, summary);
+    return this.createResult(compacted, true, keyInfos, summary, historyEstimatedLength);
   }
 
   /**
@@ -376,13 +381,18 @@ export class ContextCompactor {
     content: string,
     wasCompacted: boolean,
     preservedKeyInfo: KeyInfo[],
-    summary?: ContextSummary
+    summary?: ContextSummary,
+    historyEstimatedLength?: number,
+    originalLengthOverride?: number
   ): CompactedContext {
-    const originalLength = this.state.totalChars;
+    const originalLength = typeof originalLengthOverride === 'number'
+      ? originalLengthOverride
+      : (historyEstimatedLength ?? this.state.totalChars);
     const compactedLength = content.length;
     return {
       content,
       originalLength,
+      historyEstimatedLength,
       compactedLength,
       compressionRatio: originalLength > 0 ? compactedLength / originalLength : 1,
       wasCompacted,

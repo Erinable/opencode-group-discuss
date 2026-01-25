@@ -8,6 +8,7 @@
 
 import type { Plugin } from "@opencode-ai/plugin";
 import { createGroupDiscussTool } from "./tools/group-discuss.js";
+import { createGroupDiscussContextTool } from "./tools/group-discuss-context.js";
 import { createSessionManageTool } from "./tools/session-manage.js";
 import { Logger } from "./utils/Logger.js";
 
@@ -25,6 +26,7 @@ export const GroupDiscussPlugin: Plugin = async (ctx) => {
     // 注册自定义工具（绑定 client）
     tool: {
       group_discuss: createGroupDiscussTool(client),
+      group_discuss_context: createGroupDiscussContextTool(),
       session_manage: createSessionManageTool(client),
     },
 

@@ -1,0 +1,81 @@
+{
+  // OpenCode Group Discuss full config example
+  // Place this file at:
+  // - Project: .opencode/group-discuss.json (recommended)
+  // - Global: ~/.config/opencode/group-discuss.json
+  //
+  // Note: .opencode/ is gitignored by default in this repo.
+
+  "$schema": "https://example.invalid/opencode-group-discuss.schema.json",
+
+  "defaults": {
+    "mode": "debate",
+    "rounds": 3,
+    "timeout": 600000,
+    "concurrency": 2,
+    "verbose": true,
+    "keep_sessions": false,
+    "max_retries": 3
+  },
+
+  "presets": {
+    "tech-review": {
+      "agents": ["advocate", "critic", "moderator"],
+      "mode": "debate",
+      "rounds": 3,
+      "context": "Focus on trade-offs and decision criteria.",
+      "files": []
+    }
+  },
+
+  "consensus": {
+    "threshold": 0.8,
+    "enable_convergence_analysis": true,
+    "stalemate_window": 2,
+    "keyword_weights": {}
+  },
+
+  "termination": {
+    "min_confidence": 0.7,
+    "enable_stalemate_detection": true,
+    "stalemate_rounds": 3,
+    "disabled_conditions": []
+  },
+
+  // Recommended: token-based budgeting (users typically only tweak profile/input_tokens)
+  "context_budget": {
+    "profile": "balanced",              // small | balanced | large
+    "input_tokens": 6000,                // budget for injected context (per agent call)
+    "min_output_tokens": 512,            // reserve room for model output
+    "reasoning_headroom_tokens": 0,      // reserve room for hidden reasoning tokens
+    "chars_per_token": 4                 // heuristic conversion (CJK may use 2-3)
+  },
+
+  // Backward-compatible char-based knobs; set to "auto" to derive from context_budget
+  "context_compaction": {
+    "max_context_chars": "auto",
+    "compaction_threshold": 0.8,
+    "max_message_length": "auto",
+    "preserve_recent_rounds": 1,
+    "enable_key_info_extraction": true,
+    "keyword_weights": {},
+    "include_self_history": false
+  },
+
+  "logging": {
+    "level": "info",                    // error | warn | info | debug
+    "console_enabled": true,
+    "file_enabled": true,
+    "file_path": "group_discuss.log",
+    "include_meta": true,
+    "max_entry_chars": 8000,
+    "max_meta_chars": 4000
+  },
+
+  // Debug switches (turning any on will raise effective log level to debug)
+  "debug": {
+    "log_prompts": false,
+    "log_context": false,
+    "log_compaction": false
+  }
+}

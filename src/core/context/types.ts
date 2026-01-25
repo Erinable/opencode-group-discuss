@@ -74,6 +74,12 @@ export interface CompactedContext {
   originalLength: number;
 
   /**
+   * Estimated length of full history (including baseContext if provided).
+   * This is useful for observability even when wasCompacted=false.
+   */
+  historyEstimatedLength?: number;
+
+  /**
    * 压缩后字符数
    */
   compactedLength: number;

@@ -62,7 +62,17 @@ test('ConfigLoader: returns default config when no config files exist', async ()
     assert.strictEqual(config.defaults.rounds, DEFAULT_CONFIG.defaults.rounds);
     assert.strictEqual(config.defaults.timeout, DEFAULT_CONFIG.defaults.timeout);
     assert.strictEqual(config.consensus.threshold, DEFAULT_CONFIG.consensus.threshold);
-    assert.strictEqual(config.context_compaction.max_context_chars, DEFAULT_CONFIG.context_compaction.max_context_chars);
+    const expectedMaxContextChars = Math.max(
+        2000,
+        Math.floor(
+            (DEFAULT_CONFIG.context_budget.input_tokens -
+                DEFAULT_CONFIG.context_budget.min_output_tokens -
+                DEFAULT_CONFIG.context_budget.reasoning_headroom_tokens) *
+                DEFAULT_CONFIG.context_budget.chars_per_token
+        )
+    );
+    assert.strictEqual(config.context_compaction.max_context_chars, expectedMaxContextChars);
+    assert.strictEqual(config.context_compaction.max_message_length, 500);
     assert.strictEqual(config.logging.level, DEFAULT_CONFIG.logging.level);
     assert.strictEqual(config.debug.log_prompts, DEFAULT_CONFIG.debug.log_prompts);
 });
@@ -82,6 +92,47 @@ test('ConfigLoader: loads project-level config', async () => {
     assert.strictEqual(config.defaults.rounds, 5);
     // Other defaults should remain from DEFAULT_CONFIG
     assert.strictEqual(config.defaults.timeout, DEFAULT_CONFIG.defaults.timeout);
+});
+
+test('ConfigLoader: derives char limits from context_budget when set to auto', async () => {
+    writeTestConfig(TEST_PROJECT_DIR, {
+        context_budget: {
+            profile: 'small',
+            input_tokens: 2000,
+            min_output_tokens: 200,
+            reasoning_headroom_tokens: 0,
+            chars_per_token: 4,
+        },
+        context_compaction: {
+            max_context_chars: 'auto',
+            max_message_length: 'auto',
+        },
+    });
+
+    const loader = ConfigLoader.getInstance(TEST_PROJECT_DIR);
+    const config = await loader.loadConfig();
+
+    assert.strictEqual(config.context_compaction.max_context_chars, 7200);
+    assert.strictEqual(config.context_compaction.max_message_length, 300);
+});
+
+test('ConfigLoader: explicit char limits override context_budget', async () => {
+    writeTestConfig(TEST_PROJECT_DIR, {
+        context_budget: {
+            profile: 'large',
+            input_tokens: 12000,
+        },
+        context_compaction: {
+            max_context_chars: 12345,
+            max_message_length: 999,
+        },
+    });
+
+    const loader = ConfigLoader.getInstance(TEST_PROJECT_DIR);
+    const config = await loader.loadConfig();
+
+    assert.strictEqual(config.context_compaction.max_context_chars, 12345);
+    assert.strictEqual(config.context_compaction.max_message_length, 999);
 });
 
 test('ConfigLoader: caches config and returns same instance', async () => {
