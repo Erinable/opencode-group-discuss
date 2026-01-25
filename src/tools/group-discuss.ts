@@ -59,6 +59,11 @@ export function createGroupDiscussTool(client: any): any {
         .default(false)
         .describe("返回工具用法说明（不实际启动讨论）"),
 
+      diagnose: tool.schema
+        .boolean()
+        .default(false)
+        .describe("诊断模式：检查 client 配置和授权状态（不启动讨论）"),
+
       agents: tool.schema
         .array(tool.schema.string())
         .optional()
@@ -121,6 +126,7 @@ export function createGroupDiscussTool(client: any): any {
         topic,
         preset,
         help,
+        diagnose,
         agents: argsAgents,
         participants: argsParticipants,
         mode: argsMode,
@@ -258,6 +264,107 @@ ${presetsInfo}
 - 两者合并；同名时 participants 覆盖。
 
 提示：参数 agents 只接受已注册 subagent key。如果你需要临时角色（例如 Frontend/Backend/temp_advocate），请使用 participants 并显式指定 subagent_type。
+`;
+      }
+
+      // 诊断模式：检查 client 配置和授权状态
+      if (diagnose) {
+        const clientInfo: Record<string, any> = {
+          hasClient: !!client,
+          clientType: typeof client,
+          clientKeys: client ? Object.keys(client).slice(0, 20) : [],
+        };
+
+        if (client) {
+          // 检查 session 能力
+          clientInfo.hasSession = !!client.session;
+          if (client.session) {
+            clientInfo.sessionKeys = Object.keys(client.session).slice(0, 20);
+            clientInfo.hasPrompt = typeof client.session.prompt === 'function';
+            clientInfo.hasCreate = typeof client.session.create === 'function';
+            clientInfo.hasDelete = typeof client.session.delete === 'function';
+          }
+
+          // 检查 app 能力
+          clientInfo.hasApp = !!client.app;
+          if (client.app) {
+            clientInfo.appKeys = Object.keys(client.app).slice(0, 20);
+          }
+
+          // 检查 getConfig（如果存在）
+          if (typeof client.getConfig === 'function') {
+            try {
+              const cfg = client.getConfig();
+              clientInfo.clientConfig = {
+                baseUrl: cfg?.baseUrl,
+                hasHeaders: !!cfg?.headers,
+                headerKeys: cfg?.headers ? (typeof cfg.headers.keys === 'function' ? Array.from(cfg.headers.keys()) : Object.keys(cfg.headers)) : [],
+              };
+            } catch (e: any) {
+              clientInfo.getConfigError = e?.message || String(e);
+            }
+          }
+
+          // 尝试进行一次简单的 API 调用测试
+          clientInfo.testCall = { status: 'pending' };
+          try {
+            if (client.session?.create) {
+              const testRes = await client.session.create({
+                body: { parent: sessionID || 'test', agent: 'general' },
+              });
+              clientInfo.testCall = {
+                status: 'completed',
+                hasData: !!testRes?.data,
+                hasError: !!testRes?.error,
+                errorDetails: testRes?.error,
+                responseKeys: testRes ? Object.keys(testRes).slice(0, 10) : [],
+              };
+              // 清理测试会话
+              if (testRes?.data?.id && client.session?.delete) {
+                try {
+                  await client.session.delete({ path: { id: testRes.data.id } });
+                  clientInfo.testCall.cleanedUp = true;
+                } catch {
+                  clientInfo.testCall.cleanedUp = false;
+                }
+              }
+            } else {
+              clientInfo.testCall = { status: 'skipped', reason: 'client.session.create not available' };
+            }
+          } catch (e: any) {
+            clientInfo.testCall = {
+              status: 'error',
+              message: e?.message || String(e),
+              code: e?.code,
+            };
+          }
+        }
+
+        // 环境变量检查
+        const envInfo = {
+          OPENCODE: process.env.OPENCODE,
+          OPENCODE_CLIENT: process.env.OPENCODE_CLIENT,
+          OPENCODE_SERVER_PASSWORD: process.env.OPENCODE_SERVER_PASSWORD ? '[SET]' : '[NOT SET]',
+          OPENCODE_SERVER_USERNAME: process.env.OPENCODE_SERVER_USERNAME || '[NOT SET]',
+          OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ? '[SET]' : '[NOT SET]',
+        };
+
+        return `## group_discuss 诊断报告
+
+### Client 信息
+\`\`\`json
+${JSON.stringify(clientInfo, null, 2)}
+\`\`\`
+
+### 环境变量
+\`\`\`json
+${JSON.stringify(envInfo, null, 2)}
+\`\`\`
+
+### 诊断说明
+- 如果 testCall.hasError 为 true 且 errorDetails 包含 "Unauthorized"，说明 client 没有正确的认证信息
+- 这是 OpenCode Desktop 的已知 bug (Issue #8676)
+- 临时解决方案：使用 CLI 版本 \`opencode\` 代替 Desktop 版本
 `;
       }
 

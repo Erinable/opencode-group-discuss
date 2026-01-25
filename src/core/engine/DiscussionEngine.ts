@@ -493,24 +493,34 @@ ${context}
 
       const runCall = async () => {
         if (this.client?.session?.prompt) {
-            const res = await this.client.session.prompt({
-                body: {
-                    parts: [{ type: "text", text: prompt }],
-                    agent: agentType
-                },
-                path: { id: sessionId },
-                signal: combinedSignal
-            });
-            
-            // Debug: log raw response to help troubleshoot empty messages
-            if (this.logger.isEnabled('debug')) {
-                await this.logger.debug(`[RawResponse] Agent ${agentType} returned:`, { 
-                    resType: typeof res, 
-                    preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+            await this.logger.debug(`[InvokeStart] Calling session.prompt for agent ${agentType} in session ${sessionId}`);
+            try {
+                const res = await this.client.session.prompt({
+                    body: {
+                        parts: [{ type: "text", text: prompt }],
+                        agent: agentType
+                    },
+                    path: { id: sessionId },
+                    signal: combinedSignal
                 });
+                
+                // Debug: log raw response to help troubleshoot empty messages
+                if (this.logger.isEnabled('debug')) {
+                    await this.logger.debug(`[RawResponse] Agent ${agentType} returned:`, { 
+                        resType: typeof res, 
+                        preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+                    });
+                }
+                
+                return this.extractTextFromResponse(res);
+            } catch (promptError: any) {
+                await this.logger.error(`[PromptError] Agent ${agentType} prompt failed:`, {
+                    error: promptError?.message || String(promptError),
+                    code: promptError?.code,
+                    name: promptError?.name,
+                });
+                throw promptError;
             }
-            
-            return this.extractTextFromResponse(res);
         }
 
         if (this.client?.prompt) {
@@ -611,8 +621,10 @@ ${context}
         const newSessionID = await withRetry(async (innerSignal) => {
             const combinedSignal = this.combineSignals([baseSignal, innerSignal].filter(Boolean) as AbortSignal[]);
             const res = await this.client.session.create({
-              parentID: this.sessionID,
-              title: `Discussion Agent: ${name}`,
+              body: {
+                parentID: this.sessionID,
+                title: `Discussion Agent: ${name}`,
+              },
               signal: combinedSignal,
             });
             const session = res?.data || res;
