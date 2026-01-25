@@ -36,3 +36,4 @@ coverage/
 *.bak
 *.tmp
 .opencode/
+.sisyphus/
