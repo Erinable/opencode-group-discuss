@@ -107,5 +107,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs/PROJECT_SUMMARY.md - Project overview
 - Example configuration in templates/
 
-[0.3.1]: https://github.com/yourusername/opencode-group-discuss/releases/tag/v0.3.1
-[0.1.0]: https://github.com/yourusername/opencode-group-discuss/releases/tag/v0.1.0
+[0.3.1]: https://github.com/opencode-ai/opencode-group-discuss/releases/tag/v0.3.1
+[0.1.0]: https://github.com/opencode-ai/opencode-group-discuss/releases/tag/v0.1.0

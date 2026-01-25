@@ -4,6 +4,14 @@
 
 ### 1. 安装插件
 
+推荐在项目内安装：
+
+```bash
+npm install -D opencode-group-discuss
+```
+
+也支持全局安装（可选）：
+
 ```bash
 npm install -g opencode-group-discuss
 ```
@@ -11,6 +19,12 @@ npm install -g opencode-group-discuss
 ### 2. 配置 Agents
 
 在你的项目根目录创建 `opencode.json`：
+
+```bash
+cp templates/opencode.example.json opencode.json
+```
+
+或手动创建：
 
 ```json
 {
@@ -107,8 +121,8 @@ AI: 我来组织一个讨论
 
 ## 🆘 获取帮助
 
-- GitHub Issues: https://github.com/yourusername/opencode-group-discuss/issues
-- 文档: README.md
+- GitHub Issues: https://github.com/opencode-ai/opencode-group-discuss/issues
+- 文档: ../README.md
 - 开发指南: DEVELOPMENT.md
 
 ## 📄 许可证

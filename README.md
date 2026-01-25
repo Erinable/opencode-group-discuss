@@ -18,9 +18,36 @@
 
 > **Requirements**: Node.js >= 20.0.0
 
+推荐把插件装在你的项目里（便于 OpenCode 在该项目上下文找到依赖）：
+
+```bash
+npm install -D opencode-group-discuss
+```
+
+也支持全局安装（适合你只在少数项目里临时试用）：
+
 ```bash
 npm install -g opencode-group-discuss
 ```
+
+启用插件：在项目根目录的 `opencode.json` 里加入：
+
+```json
+{
+  "plugin": ["opencode-group-discuss"]
+}
+```
+
+你也可以直接基于模板开始：
+
+```bash
+cp templates/opencode.example.json opencode.json
+```
+
+安装校验：在 OpenCode 里调用以下工具（只看帮助，不会执行讨论）：
+
+- `group_discuss(help=true)`
+- `group_discuss_context(help=true)`
 
 你可以用 `group_discuss_context` 查看当前生效的预算与推导后的字符上限（便于端到端调试/断言）。
 
@@ -344,7 +371,7 @@ Build Agent: 好的，我来启动一个群聊讨论。
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/opencode-group-discuss
+git clone https://github.com/opencode-ai/opencode-group-discuss
 cd opencode-group-discuss
 
 # 安装依赖
