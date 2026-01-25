@@ -7,8 +7,7 @@ import { AgentRegistry } from '../dist/core/engine/AgentRegistry.js';
 // Mock AgentRegistry to return known agents
 test.before(() => {
     // Inject mock cache
-    AgentRegistry.cache = new Set(['advocate', 'critic', 'moderator', 'general', 'explore']);
-    AgentRegistry.initialized = true;
+    AgentRegistry.cache = new Map([[process.cwd(), new Set(['advocate', 'critic', 'moderator', 'general', 'explore'])]]);
 });
 
 test('DiscussionFacade.transform: valid minimal input', async (t) => {

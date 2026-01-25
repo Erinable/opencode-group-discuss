@@ -1,23 +1,25 @@
 import { AsyncFS } from '../../utils/AsyncFS.js';
 import * as path from 'path';
+import { getConfigLoader } from '../../config/ConfigLoader.js';
 
 /**
  * AgentRegistry caches known agent IDs to avoid repeated disk IO.
  */
 export class AgentRegistry {
-  private static cache: Set<string> | null = null;
-  private static initialized = false;
+  private static cache: Map<string, Set<string>> = new Map();
 
   static async getAgentIDs(): Promise<Set<string>> {
-    if (this.cache && this.initialized) return this.cache;
-    await this.load();
-    return this.cache || new Set(['general', 'explore']);
+    const projectRoot = getConfigLoader().getProjectRoot();
+    const cached = this.cache.get(projectRoot);
+    if (cached) return cached;
+    await this.load(projectRoot);
+    return this.cache.get(projectRoot) || new Set(['general', 'explore']);
   }
 
-  private static async load() {
+  private static async load(projectRoot: string) {
     const ids = new Set<string>(['general', 'explore']);
     try {
-      const configPath = path.resolve(process.cwd(), 'opencode.json');
+      const configPath = path.resolve(projectRoot, 'opencode.json');
       const exists = await AsyncFS.exists(configPath);
       if (exists) {
         const raw = await AsyncFS.readFile(configPath, 'utf-8');
@@ -32,7 +34,6 @@ export class AgentRegistry {
     } catch {
       // ignore
     }
-    this.cache = ids;
-    this.initialized = true;
+    this.cache.set(projectRoot, ids);
   }
 }
