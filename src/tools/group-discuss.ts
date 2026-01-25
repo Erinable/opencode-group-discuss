@@ -8,12 +8,16 @@ import { DebateMode } from "../modes/DebateMode.js";
 import { CollaborativeMode } from "../modes/CollaborativeMode.js";
 import type { DiscussionResult } from "../types/index.js";
 import { Logger } from "../utils/Logger.js";
+import { scrubString, truncateString } from "../utils/Sanitizer.js";
 import { getConfigLoader } from "../config/ConfigLoader.js";
 import type { DiscussionPreset } from "../config/schema.js";
+import { buildDiagnoseClientInfo, buildDiagnoseEnvInfo } from "./diagnose.js";
 import * as fs from "fs";
 import * as path from "path";
 
-export function createGroupDiscussTool(client: any): any {
+const MAX_ERROR_CHARS = 1024;
+
+export function createGroupDiscussTool(client: any, projectRoot?: string): any {
   return tool({
     description: `启动多 Agent 群聊讨论（支持已注册 agent 与临时参与者）。
 
@@ -139,7 +143,7 @@ export function createGroupDiscussTool(client: any): any {
       // ToolContext 只包含 sessionID, messageID, agent, abort
       const { sessionID } = context;
       // 加载配置文件
-      const configLoader = getConfigLoader();
+      const configLoader = getConfigLoader(projectRoot);
       const config = await configLoader.loadConfig();
       const defaults = config.defaults;
 
@@ -199,7 +203,8 @@ export function createGroupDiscussTool(client: any): any {
       await logger.info(`模式: ${mode}, 轮数: ${rounds}${preset ? `, 预设: ${preset}` : ''}`, { mode, rounds, preset });
 
       if (help) {
-        const known = Array.from(loadKnownAgentIDs()).sort().join(", ");
+        const root = projectRoot ?? getConfigLoader().getProjectRoot();
+        const known = Array.from(loadKnownAgentIDs(root)).sort().join(", ");
         const presetNames = await configLoader.getPresetNames();
         const presetsInfo = presetNames.length > 0 
           ? `可用预设：${presetNames.join(', ')}`
@@ -269,85 +274,8 @@ ${presetsInfo}
 
       // 诊断模式：检查 client 配置和授权状态
       if (diagnose) {
-        const clientInfo: Record<string, any> = {
-          hasClient: !!client,
-          clientType: typeof client,
-          clientKeys: client ? Object.keys(client).slice(0, 20) : [],
-        };
-
-        if (client) {
-          // 检查 session 能力
-          clientInfo.hasSession = !!client.session;
-          if (client.session) {
-            clientInfo.sessionKeys = Object.keys(client.session).slice(0, 20);
-            clientInfo.hasPrompt = typeof client.session.prompt === 'function';
-            clientInfo.hasCreate = typeof client.session.create === 'function';
-            clientInfo.hasDelete = typeof client.session.delete === 'function';
-          }
-
-          // 检查 app 能力
-          clientInfo.hasApp = !!client.app;
-          if (client.app) {
-            clientInfo.appKeys = Object.keys(client.app).slice(0, 20);
-          }
-
-          // 检查 getConfig（如果存在）
-          if (typeof client.getConfig === 'function') {
-            try {
-              const cfg = client.getConfig();
-              clientInfo.clientConfig = {
-                baseUrl: cfg?.baseUrl,
-                hasHeaders: !!cfg?.headers,
-                headerKeys: cfg?.headers ? (typeof cfg.headers.keys === 'function' ? Array.from(cfg.headers.keys()) : Object.keys(cfg.headers)) : [],
-              };
-            } catch (e: any) {
-              clientInfo.getConfigError = e?.message || String(e);
-            }
-          }
-
-          // 尝试进行一次简单的 API 调用测试
-          clientInfo.testCall = { status: 'pending' };
-          try {
-            if (client.session?.create) {
-              const testRes = await client.session.create({
-                body: { parent: sessionID || 'test', agent: 'general' },
-              });
-              clientInfo.testCall = {
-                status: 'completed',
-                hasData: !!testRes?.data,
-                hasError: !!testRes?.error,
-                errorDetails: testRes?.error,
-                responseKeys: testRes ? Object.keys(testRes).slice(0, 10) : [],
-              };
-              // 清理测试会话
-              if (testRes?.data?.id && client.session?.delete) {
-                try {
-                  await client.session.delete({ path: { id: testRes.data.id } });
-                  clientInfo.testCall.cleanedUp = true;
-                } catch {
-                  clientInfo.testCall.cleanedUp = false;
-                }
-              }
-            } else {
-              clientInfo.testCall = { status: 'skipped', reason: 'client.session.create not available' };
-            }
-          } catch (e: any) {
-            clientInfo.testCall = {
-              status: 'error',
-              message: e?.message || String(e),
-              code: e?.code,
-            };
-          }
-        }
-
-        // 环境变量检查
-        const envInfo = {
-          OPENCODE: process.env.OPENCODE,
-          OPENCODE_CLIENT: process.env.OPENCODE_CLIENT,
-          OPENCODE_SERVER_PASSWORD: process.env.OPENCODE_SERVER_PASSWORD ? '[SET]' : '[NOT SET]',
-          OPENCODE_SERVER_USERNAME: process.env.OPENCODE_SERVER_USERNAME || '[NOT SET]',
-          OPENCODE_API_KEY: process.env.OPENCODE_API_KEY ? '[SET]' : '[NOT SET]',
-        };
+        const clientInfo = await buildDiagnoseClientInfo(client, sessionID);
+        const envInfo = buildDiagnoseEnvInfo();
 
         return `## group_discuss 诊断报告
 
@@ -362,7 +290,7 @@ ${JSON.stringify(envInfo, null, 2)}
 \`\`\`
 
 ### 诊断说明
-- 如果 testCall.hasError 为 true 且 errorDetails 包含 "Unauthorized"，说明 client 没有正确的认证信息
+- 如果 testCall.hasError 为 true 且 message 包含 "Unauthorized"，说明 client 没有正确的认证信息
 - 这是 OpenCode Desktop 的已知 bug (Issue #8676)
 - 临时解决方案：使用 CLI 版本 \`opencode\` 代替 Desktop 版本
 `;
@@ -400,7 +328,7 @@ ${JSON.stringify(envInfo, null, 2)}
           });
         }
 
-        const knownAgentIDs = loadKnownAgentIDs();
+      const knownAgentIDs = loadKnownAgentIDs(projectRoot ?? configLoader.getProjectRoot());
         const knownList = Array.from(knownAgentIDs).sort().join(", ");
 
         // agents：仅允许已注册 agent key；若未传且 participants 存在，则不注入默认辩论三人组
@@ -507,7 +435,9 @@ ${JSON.stringify(envInfo, null, 2)}
           agents: agents || getDefaultAgents(mode),
           sessionID,
         });
-        return `❌ 讨论过程发生错误: ${error instanceof Error ? error.message : String(error)}`;
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        const safeMessage = truncateString(scrubString(rawMessage), MAX_ERROR_CHARS);
+        return `❌ 讨论过程发生错误: ${safeMessage}`;
       }
     },
   });
@@ -539,13 +469,13 @@ function getModeInstance(modeName: string) {
   }
 }
 
-function loadKnownAgentIDs(): Set<string> {
+function loadKnownAgentIDs(projectRoot: string): Set<string> {
   // 兜底：general/explore 通常为内置类型
   const ids = new Set<string>(["general", "explore"]);
 
-  // 尝试从当前工作目录加载 opencode.json 的 agent keys
+  // 尝试从项目根目录加载 opencode.json 的 agent keys
   try {
-    const configPath = path.resolve(process.cwd(), "opencode.json");
+    const configPath = path.resolve(projectRoot, "opencode.json");
     if (fs.existsSync(configPath)) {
       const raw = fs.readFileSync(configPath, "utf-8");
       const parsed = JSON.parse(raw);

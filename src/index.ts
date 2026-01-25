@@ -11,6 +11,7 @@ import { createGroupDiscussTool } from "./tools/group-discuss.js";
 import { createGroupDiscussContextTool } from "./tools/group-discuss-context.js";
 import { createSessionManageTool } from "./tools/session-manage.js";
 import { Logger } from "./utils/Logger.js";
+import { getConfigLoader } from "./config/ConfigLoader.js";
 
 /**
  * Main plugin export
@@ -19,14 +20,18 @@ export const GroupDiscussPlugin: Plugin = async (ctx) => {
   const { client, directory } = ctx;
   const logger = new Logger(client);
 
+  // Bind config loader singleton to OpenCode project root.
+  // Downstream code that calls getConfigLoader() will inherit this root.
+  getConfigLoader(directory);
+
   logger.info("插件已加载").catch(() => {});
   logger.info(`项目目录: ${directory}`).catch(() => {});
 
   return {
     // 注册自定义工具（绑定 client）
     tool: {
-      group_discuss: createGroupDiscussTool(client),
-      group_discuss_context: createGroupDiscussContextTool(),
+      group_discuss: createGroupDiscussTool(client, directory),
+      group_discuss_context: createGroupDiscussContextTool(directory),
       session_manage: createSessionManageTool(client),
     },
 
