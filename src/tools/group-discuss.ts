@@ -480,7 +480,22 @@ function formatDiscussionResult(
   // 结论
   output += `🎯 讨论结论：\n`;
   output += conclusion;
+  if (result.terminationReason) {
+    output += `\n*(终止原因: ${result.terminationReason})*\n`;
+  }
   output += `\n\n`;
+
+  // 错误信息
+  if (result.errors && result.errors.length > 0) {
+    output += `❌ 讨论过程中出现错误：\n`;
+    for (const err of result.errors) {
+      const agentInfo = err.agent ? `@${err.agent} ` : "";
+      const roundInfo = err.round ? `(Round ${err.round}) ` : "";
+      const codeInfo = err.code ? `[${err.code}] ` : "";
+      output += `- ${agentInfo}${roundInfo}${codeInfo}${err.message}\n`;
+    }
+    output += `\n`;
+  }
 
   // 如果需要详细输出，添加完整对话记录
   if (verbose) {

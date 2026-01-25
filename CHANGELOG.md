@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-25
+
+### Added
+- **Context Compaction**: Automatically summarizes and compresses older discussion rounds to stay within context limits while preserving key information (agreements, disagreements, decisions).
+- **Token-based Context Budget**: Replaced character-based limits with a more precise token-based budgeting system. Supports `auto` derivation of limits based on target profiles (`small`, `balanced`, `large`).
+- **Configurable Logging**: New logging system with support for file/console output, meta-data truncation, and log level control.
+- **Debug Instrumentation**: Added switches to trace prompts, full context, and compaction logic via `GROUP_DISCUSS_DEBUG` or config.
+- **group_discuss_context Tool**: New tool to inspect effective context budgets and derived limits in real-time.
+- **Tool Help Support**: Added `help=true` to all tools for interactive self-documentation.
+
+### Changed
+- **Documentation Reorganization**: Moved technical docs to `docs/` and added `QUICKSTART.md`, `DEVELOPMENT.md`, and `MIGRATION.md`.
+- **Improved Tooling**: Enhanced `group_discuss` to better handle duplicate agent names and report errors more clearly.
+
+### Fixed
+- **Bug Fix**: Fixed a critical issue where participant display names were incorrectly passed as agent keys, causing "Unknown agent" errors.
+- **Bug Fix**: Fixed duplicate agent names being merged into a single participant.
+- **Fixed Log Semantics**: Corrected misleading compression ratios in logs.
+
 ## [0.3.1] - 2026-01-15
 
 ### Added
@@ -88,28 +107,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs/PROJECT_SUMMARY.md - Project overview
 - Example configuration in templates/
 
-## [Unreleased]
-
-### Planned for 0.2.0
-
-- [ ] Real OpenCode client integration
-- [ ] BrainstormMode implementation
-- [ ] ConsensusMode implementation
-- [ ] discussion_status tool
-- [ ] Context compression mechanism
-- [ ] Unit tests suite
-- [ ] Integration tests
-- [ ] Performance optimizations
-
-### Future Considerations
-
-- [ ] Discussion history persistence
-- [ ] Replay functionality
-- [ ] Export to Markdown/PDF
-- [ ] Custom mode plugins
-- [ ] Web UI for discussion visualization
-- [ ] Multi-language support
-
----
-
+[0.3.1]: https://github.com/yourusername/opencode-group-discuss/releases/tag/v0.3.1
 [0.1.0]: https://github.com/yourusername/opencode-group-discuss/releases/tag/v0.1.0
