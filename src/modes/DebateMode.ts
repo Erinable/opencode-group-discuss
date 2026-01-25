@@ -4,6 +4,8 @@
  */
 
 import type { DiscussionMode, DiscussionMessage } from "../types/index.js";
+import type { ConsensusConfig } from "../core/consensus/types.js";
+import type { TerminationCondition, TerminationSignal } from "../core/termination/types.js";
 
 export class DebateMode implements DiscussionMode {
   /**
@@ -82,5 +84,74 @@ export class DebateMode implements DiscussionMode {
       consensusKeywords.some(k => m.content.toLowerCase().includes(k))
     ).length;
     return agrees / lastRound.length;
+  }
+
+  /**
+   * P0: 获取辩论模式的共识配置
+   * 辩论模式对共识要求更高，阈值设为 0.85
+   */
+  getConsensusConfig(): Partial<ConsensusConfig> {
+    return {
+      consensusThreshold: 0.85,
+      enableConvergenceAnalysis: true,
+      stalemateWindow: 2,
+      keywordWeights: {
+        // 辩论模式额外增加一些对抗性关键词的权重
+        '让步': 0.6,
+        '接受': 0.7,
+        '妥协': 0.5,
+        'concede': 0.6,
+        'accept': 0.7,
+      }
+    };
+  }
+
+  /**
+   * P0: 获取辩论模式的自定义终止条件
+   */
+  getTerminationConditions(): TerminationCondition[] {
+    return [
+      // 辩论模式特有：Moderator 明确宣布结论
+      {
+        name: 'moderator_decision',
+        priority: 95,
+        check: async (ctx): Promise<TerminationSignal> => {
+          if (ctx.messages.length === 0) {
+            return { shouldStop: false, confidence: 0 };
+          }
+
+          // 检查最后一条消息是否来自 moderator 且包含结论性表述
+          const lastMsg = ctx.messages[ctx.messages.length - 1];
+          const isModerator = 
+            lastMsg.agent.toLowerCase().includes('moderator') ||
+            lastMsg.agent.includes('主持') ||
+            lastMsg.agent.includes('裁判');
+
+          if (!isModerator) {
+            return { shouldStop: false, confidence: 0 };
+          }
+
+          const conclusionPatterns = [
+            '综合各方观点',
+            '最终裁定',
+            '经过讨论',
+            '我的结论是',
+            '总结如下',
+            'in conclusion',
+            'final verdict'
+          ];
+
+          if (conclusionPatterns.some(p => lastMsg.content.toLowerCase().includes(p.toLowerCase()))) {
+            return {
+              shouldStop: true,
+              reason: 'Moderator 已做出裁定',
+              confidence: 0.95
+            };
+          }
+
+          return { shouldStop: false, confidence: 0 };
+        }
+      }
+    ];
   }
 }

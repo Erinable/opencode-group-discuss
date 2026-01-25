@@ -2,6 +2,10 @@
  * Core types for group discussion plugin
  */
 
+// Re-export consensus and termination types for convenience
+export type { ConsensusConfig, ConsensusReport } from '../core/consensus/types.js';
+export type { TerminationCondition, TerminationSignal } from '../core/termination/types.js';
+
 export interface DiscussionMessage {
   agent: string;
   content: string;
@@ -30,6 +34,14 @@ export interface DiscussionResult {
   stopReason?: string;
   createdSessionIDs?: string[]; // 本次讨论创建的子 session ID 列表
   errors?: DiscussionError[];
+  
+  // P0 新增字段
+  /** 详细的共识评估报告 */
+  consensusReport?: import('../core/consensus/types.js').ConsensusReport;
+  /** 终止原因（由 TerminationManager 提供） */
+  terminationReason?: string;
+  /** 是否提前终止 */
+  earlyTermination?: boolean;
 }
 
 export interface DiscussionParticipant {
@@ -82,6 +94,7 @@ export interface DiscussionMode {
   
   /**
    * 判断是否应该提前结束讨论
+   * @deprecated 使用 getTerminationConditions() 替代
    */
   shouldStop(messages: DiscussionMessage[], currentRound: number): Promise<boolean>;
   
@@ -92,8 +105,21 @@ export interface DiscussionMode {
   
   /**
    * 计算共识度 (0-1)
+   * @deprecated 使用 getConsensusConfig() 配合 ConsensusEvaluator 替代
    */
   calculateConsensus(messages: DiscussionMessage[]): number;
+  
+  // P0 新增可选方法
+  
+  /**
+   * 获取该模式下的自定义终止条件
+   */
+  getTerminationConditions?(): import('../core/termination/types.js').TerminationCondition[];
+  
+  /**
+   * 获取该模式下的共识评估配置
+   */
+  getConsensusConfig?(): Partial<import('../core/consensus/types.js').ConsensusConfig>;
 }
 
 /**

@@ -12,6 +12,11 @@ import { AsyncFS } from '../../utils/AsyncFS.js';
 import { withRetry } from '../../utils/withRetry.js';
 import { DebateMode } from '../../modes/DebateMode.js';
 import { CollaborativeMode } from '../../modes/CollaborativeMode.js';
+import { ConsensusEvaluator } from '../consensus/ConsensusEvaluator.js';
+import { TerminationManager } from '../termination/TerminationManager.js';
+import { getConfigLoader } from '../../config/ConfigLoader.js';
+import type { ConsensusReport } from '../consensus/types.js';
+import type { TerminationContext } from '../termination/types.js';
 import * as path from 'path';
 
 export class DiscussionEngine implements IDiscussionEngine {
@@ -24,6 +29,13 @@ export class DiscussionEngine implements IDiscussionEngine {
   private modeInstance!: any; // DiscussionMode interface
   private abortController!: AbortController;
   private cleanupPromise?: Promise<void>;
+  
+  // P0: 新增共识评估器和终止管理器
+  private consensusEvaluator!: ConsensusEvaluator;
+  private terminationManager!: TerminationManager;
+  private latestConsensusReport?: ConsensusReport;
+  private terminationReason?: string;
+  private earlyTermination: boolean = false;
 
   constructor(client: any, sessionID: string, logger?: Logger) {
     this.client = client;
@@ -54,9 +66,40 @@ export class DiscussionEngine implements IDiscussionEngine {
     // Initialize Mode
     this.modeInstance = this.getModeInstance(options.mode);
     
+    // 加载配置文件中的共识和终止配置
+    const configLoader = getConfigLoader();
+    const fileConfig = await configLoader.loadConfig();
+    
+    // P0: 初始化共识评估器（合并配置文件 + mode 提供的配置）
+    const modeConsensusConfig = this.modeInstance.getConsensusConfig?.() ?? {};
+    const mergedConsensusConfig = {
+      consensusThreshold: fileConfig.consensus.threshold,
+      enableConvergenceAnalysis: fileConfig.consensus.enable_convergence_analysis,
+      stalemateWindow: fileConfig.consensus.stalemate_window,
+      keywordWeights: fileConfig.consensus.keyword_weights,
+      ...modeConsensusConfig, // mode 配置可以覆盖文件配置
+    };
+    this.consensusEvaluator = new ConsensusEvaluator(mergedConsensusConfig);
+    
+    // P0: 初始化终止管理器（合并配置文件 + mode 提供的自定义条件）
+    const customTerminationConditions = this.modeInstance.getTerminationConditions?.() ?? [];
+    const terminationConfig = {
+      minConfidence: fileConfig.termination.min_confidence,
+      enableStalemateDetection: fileConfig.termination.enable_stalemate_detection,
+      stalemateRounds: fileConfig.termination.stalemate_rounds,
+    };
+    this.terminationManager = new TerminationManager(customTerminationConditions, terminationConfig);
+    
+    // 移除被禁用的终止条件
+    for (const conditionName of fileConfig.termination.disabled_conditions) {
+      this.terminationManager.removeCondition(conditionName);
+    }
+    
     await this.logger.debug('DiscussionEngine initialized', { 
       mode: options.mode, 
-      participants: options.participants.map(p => p.name) 
+      participants: options.participants.map(p => p.name),
+      terminationConditions: this.terminationManager.getConditionNames(),
+      consensusThreshold: mergedConsensusConfig.consensusThreshold,
     });
   }
 
@@ -74,13 +117,17 @@ export class DiscussionEngine implements IDiscussionEngine {
       topic: this.state.topic,
       messages: this.state.messages,
       conclusion,
-      consensus: this.modeInstance.calculateConsensus(this.state.messages),
+      consensus: this.latestConsensusReport?.overallScore ?? this.modeInstance.calculateConsensus(this.state.messages),
       rounds: this.state.currentRound,
       duration: Date.now() - startTime,
       createdSessionIDs: Object.values(this.state.subSessionIds),
       status: this.mapStatus(this.state.status),
       stopReason: this.state.stopReason,
       errors: this.state.errors,
+      // P0 新增字段
+      consensusReport: this.latestConsensusReport,
+      terminationReason: this.terminationReason,
+      earlyTermination: this.earlyTermination,
     });
 
     try {
@@ -92,8 +139,38 @@ export class DiscussionEngine implements IDiscussionEngine {
         this.state.updatedAt = Date.now();
 
         if (engineSignal.aborted) break;
+        
+        // P0: 每轮结束后进行共识评估
+        this.latestConsensusReport = await this.consensusEvaluator.evaluate(this.state.messages);
+        await this.logger.debug(`Round ${round} consensus: ${(this.latestConsensusReport.overallScore * 100).toFixed(1)}%`, {
+          convergenceRate: this.latestConsensusReport.convergenceRate,
+          recommendation: this.latestConsensusReport.recommendation,
+          disagreements: this.latestConsensusReport.disagreements.length
+        });
+
+        // P0: 使用 TerminationManager 检查是否应该终止
+        const terminationContext: TerminationContext = {
+          messages: this.state.messages,
+          currentRound: this.state.currentRound,
+          maxRounds: this.state.maxRounds,
+          consensusReport: this.latestConsensusReport,
+          mode: this.options.mode,
+          elapsedTime: Date.now() - startTime
+        };
+
+        const terminationSignal = await this.terminationManager.shouldTerminate(terminationContext);
+        if (terminationSignal.shouldStop) {
+          this.terminationReason = terminationSignal.reason;
+          this.earlyTermination = round < this.state.maxRounds;
+          await this.logger.info(`Discussion terminated early: ${terminationSignal.reason} (confidence: ${(terminationSignal.confidence * 100).toFixed(0)}%)`);
+          break;
+        }
+
+        // 兼容旧版 shouldStop 方法（作为备选）
         if (await this.modeInstance.shouldStop(this.state.messages, this.state.currentRound)) {
-           await this.logger.info('Discussion stopped early by mode logic.');
+           await this.logger.info('Discussion stopped early by legacy mode logic.');
+           this.terminationReason = 'Legacy mode shouldStop';
+           this.earlyTermination = round < this.state.maxRounds;
            break;
         }
       }

@@ -8,6 +8,8 @@ import { DebateMode } from "../modes/DebateMode.js";
 import { CollaborativeMode } from "../modes/CollaborativeMode.js";
 import type { DiscussionResult } from "../types/index.js";
 import { Logger } from "../utils/Logger.js";
+import { getConfigLoader } from "../config/ConfigLoader.js";
+import type { DiscussionPreset } from "../config/schema.js";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -48,6 +50,11 @@ export function createGroupDiscussTool(client: any): any {
       topic: tool.schema
         .string()
         .describe("讨论话题，例如：'应该用 PostgreSQL 还是 MySQL？'"),
+
+      preset: tool.schema
+        .string()
+        .optional()
+        .describe("使用预设配置名称（定义在 group-discuss.json 的 presets 中）。预设会提供 agents/participants/mode/rounds 等默认值，可被其他参数覆盖。"),
 
       help: tool.schema
         .boolean()
@@ -114,39 +121,89 @@ export function createGroupDiscussTool(client: any): any {
     async execute(args, context) {
       const {
         topic,
+        preset,
         help,
-        agents,
-        participants,
-        mode,
-        rounds,
-        verbose,
+        agents: argsAgents,
+        participants: argsParticipants,
+        mode: argsMode,
+        rounds: argsRounds,
+        verbose: argsVerbose,
         context: extraContext,
-        files,
-        keep_sessions,
+        files: argsFiles,
+        keep_sessions: argsKeepSessions,
       } = args;
       // ToolContext 只包含 sessionID, messageID, agent, abort
       const { sessionID } = context;
       const logger = boundLogger;
 
+      // 加载配置文件
+      const configLoader = getConfigLoader();
+      const config = await configLoader.loadConfig();
+      const defaults = config.defaults;
+
+      // 如果指定了 preset，加载预设配置
+      let presetConfig: DiscussionPreset | undefined;
+      if (preset) {
+        presetConfig = await configLoader.getPreset(preset);
+        if (!presetConfig) {
+          const availablePresets = await configLoader.getPresetNames();
+          return `❌ 预设 "${preset}" 不存在。\n\n可用预设：${availablePresets.length > 0 ? availablePresets.join(', ') : '（无）'}\n\n请在 .opencode/group-discuss.json 或 ~/.config/opencode/group-discuss.json 中定义预设。`;
+        }
+      }
+
+      // 合并参数优先级：显式参数 > 预设 > 配置默认值
+      const agents = argsAgents ?? presetConfig?.agents;
+      const participants = argsParticipants ?? presetConfig?.participants?.map(p => ({
+        name: p.name,
+        subagent_type: p.subagent_type,
+        role: p.role,
+      }));
+      const mode = argsMode ?? presetConfig?.mode ?? defaults.mode;
+      const rounds = argsRounds ?? presetConfig?.rounds ?? defaults.rounds;
+      const verbose = argsVerbose ?? defaults.verbose;
+      const files = argsFiles ?? presetConfig?.files;
+      const keep_sessions = argsKeepSessions ?? defaults.keep_sessions;
+      const mergedContext = [presetConfig?.context, extraContext].filter(Boolean).join('\n\n') || undefined;
+
       await logger.info("启动讨论工具", {
         topic,
+        preset,
         mode,
         rounds,
         verbose,
         sessionID,
       });
       await logger.info(`话题: ${topic}`, { topic });
-      await logger.info(`模式: ${mode}, 轮数: ${rounds}`, { mode, rounds });
+      await logger.info(`模式: ${mode}, 轮数: ${rounds}${preset ? `, 预设: ${preset}` : ''}`, { mode, rounds, preset });
 
       if (help) {
         const known = Array.from(loadKnownAgentIDs()).sort().join(", ");
+        const presetNames = await configLoader.getPresetNames();
+        const presetsInfo = presetNames.length > 0 
+          ? `可用预设：${presetNames.join(', ')}`
+          : '可用预设：（无，请在 .opencode/group-discuss.json 中定义）';
         return `
 ## group_discuss 用法
 
 已注册 subagent_type 列表（从 opencode.json 读取 + 内置兜底）：
 ${known}
 
-### 1) 全注册 subagent（推荐）
+${presetsInfo}
+
+### 0) 使用预设（推荐）
+
+通过 preset 参数快速复用预定义配置：
+
+\`\`\`json
+{
+  "topic": "...",
+  "preset": "tech-review"
+}
+\`\`\`
+
+预设在 .opencode/group-discuss.json 或 ~/.config/opencode/group-discuss.json 中定义。
+
+### 1) 全注册 subagent
 
 参数：
 - \`agents\`：填写 opencode.json 里已注册的 agent key（如 \`advocate\`/\`critic\`/\`moderator\`/\`summarizer\`）
@@ -304,7 +361,7 @@ ${known}
             mode: getModeInstance(mode),
             maxRounds: rounds,
             verbose,
-            context: extraContext,
+            context: mergedContext,
             files,
             keepSessions: keep_sessions,
           },
