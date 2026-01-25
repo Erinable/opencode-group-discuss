@@ -118,6 +118,44 @@ export class Logger {
     await this.log("debug", message, meta);
   }
 
+  private scrubString(value: string): string {
+    let out = value;
+
+    // Authorization headers / bearer tokens
+    out = out.replace(/Authorization\s*:\s*Bearer\s+\S+/gi, 'Authorization: Bearer [REDACTED]');
+    out = out.replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]');
+
+    // JWTs
+    out = out.replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '[REDACTED]');
+
+    // OpenAI-like keys
+    out = out.replace(/sk-[A-Za-z0-9]{20,}/g, 'sk-[REDACTED]');
+
+    // Querystring-ish secrets
+    out = out.replace(/\b(api[_-]?key|token|password)=([^&\s]+)/gi, (_m, k) => `${String(k)}=[REDACTED]`);
+
+    return out;
+  }
+
+  private scrubAny(value: any, seen: WeakSet<object> = new WeakSet()): any {
+    if (value == null) return value;
+    if (typeof value === 'string') return this.scrubString(value);
+    if (typeof value !== 'object') return value;
+
+    if (seen.has(value)) return '[Circular]';
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      return value.map((v) => this.scrubAny(v, seen));
+    }
+
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = this.scrubAny(v, seen);
+    }
+    return out;
+  }
+
   private async log(
     level: LogLevel,
     message: string,
@@ -125,9 +163,12 @@ export class Logger {
   ): Promise<void> {
     if (!this.shouldLog(level)) return;
 
-    const text = `${LOG_PREFIX} ${message}`;
+    const safeMessage = this.scrubString(message);
+    const safeMeta = meta ? (this.scrubAny(meta) as Record<string, any>) : undefined;
+
+    const text = `${LOG_PREFIX} ${safeMessage}`;
     const timestamp = new Date().toISOString();
-    const metaString = this.options.includeMeta && meta ? ` | meta=${this.formatMeta(meta)}` : "";
+    const metaString = this.options.includeMeta && safeMeta ? ` | meta=${this.formatMeta(safeMeta)}` : "";
     const rawLine = `${timestamp} [${level.toUpperCase()}] ${text}${metaString}`;
     const fileLogLine = `${this.truncateLine(rawLine, this.options.maxEntryChars)}\n`;
 
@@ -150,7 +191,7 @@ export class Logger {
                 service: this.service,
                 level,
                 message: text,
-                extra: meta, // SDK 使用 extra 而非 metadata
+                extra: safeMeta, // SDK 使用 extra 而非 metadata
               },
               signal: controller.signal,
             }),
@@ -170,8 +211,8 @@ export class Logger {
     }
 
     if (this.options.consoleEnabled) {
-      const withMeta = this.options.includeMeta && meta
-        ? `${text} | meta=${this.formatMeta(meta)}`
+      const withMeta = this.options.includeMeta && safeMeta
+        ? `${text} | meta=${this.formatMeta(safeMeta)}`
         : text;
       this.fallback(level, this.truncateLine(withMeta, this.options.maxEntryChars));
     }
@@ -198,7 +239,7 @@ export class Logger {
         }
         return value;
       });
-      return this.truncateLine(json, this.options.maxMetaChars);
+      return this.truncateLine(this.scrubString(json), this.options.maxMetaChars);
     } catch {
       return String(meta);
     }
