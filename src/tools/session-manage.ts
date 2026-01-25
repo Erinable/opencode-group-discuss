@@ -41,6 +41,11 @@ export function createSessionManageTool(client: any): any {
           "- show: 查看指定子会话详情（需 session_ids）"
         ),
 
+      help: tool.schema
+        .boolean()
+        .default(false)
+        .describe("返回工具用法说明（不执行操作）"),
+
       session_ids: tool.schema
         .array(tool.schema.string())
         .optional()
@@ -52,9 +57,13 @@ export function createSessionManageTool(client: any): any {
     },
 
     async execute(args, context) {
-      const { action, session_ids } = args;
+      const { action, session_ids, help } = args;
       const { sessionID } = context;
       const logger = boundLogger;
+
+      if (help) {
+        return `## session_manage\n\n管理当前主会话（Root Session）下的子会话。\n\n### 参数\n- action: list | delete | show\n- session_ids: string[]（delete/show 必填）\n\n### 示例\n\n\`\`\`json\n{ "action": "list" }\n\`\`\`\n\n\`\`\`json\n{ "action": "delete", "session_ids": ["ses_123", "ses_456"] }\n\`\`\`\n\n提示：通常只在 group_discuss 的 keep_sessions=true 时需要手动清理。`;
+      }
 
       await logger.info(`Session Manage: ${action}`, { sessionID, session_ids });
 

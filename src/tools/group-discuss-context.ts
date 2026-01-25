@@ -7,7 +7,7 @@ import { getConfigLoader } from "../config/ConfigLoader.js";
 
 export function createGroupDiscussContextTool(): any {
   return tool({
-    description: "Show effective context budget and derived limits for group_discuss.",
+    description: "Show effective context budget and derived limits for group_discuss (safe, no discussion run).",
     args: {
       help: tool.schema
         .boolean()
@@ -16,7 +16,7 @@ export function createGroupDiscussContextTool(): any {
     },
     async execute(args) {
       if (args.help) {
-        return `## group_discuss_context\n\nShows the resolved context budgeting configuration and derived character limits used by group_discuss.`;
+        return `## group_discuss_context\n\nShows the resolved context_budget and the derived character limits used by group_discuss.\n\nUse this before running group_discuss to verify budgets for E2E tests.\n\n### Output\n- context_budget: profile/input_tokens/min_output_tokens/reasoning_headroom_tokens/chars_per_token\n- derived_max_context_chars: computed from budget\n- effective context_compaction: max_context_chars/max_message_length/preserve_recent_rounds/compaction_threshold\n`;
       }
 
       const configLoader = getConfigLoader();

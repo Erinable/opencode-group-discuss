@@ -2,7 +2,7 @@
 
 🎯 多Agent群聊讨论插件，让OpenCode的AI agents能够协作辩论和讨论问题。
 
-> ⚠️ **v0.3.0 重要更新**: 本版本引入了破坏性变更（Node >= 20, 错误码标准化）。请参考 [迁移指南 (MIGRATION.md)](./MIGRATION.md)。
+> ⚠️ **v0.3.0 重要更新**: 本版本引入了破坏性变更（Node >= 20, 错误码标准化）。请参考 [迁移指南 (docs/MIGRATION.md)](./docs/MIGRATION.md)。
 
 ## ✨ 特性
 
@@ -135,6 +135,14 @@ Build Agent: 好的，我来启动一个群聊讨论。
 | `verbose` | boolean | `true` | 是否显示完整对话记录 |
 
 > **提示**: 默认超时时间为 10 分钟，并发数为 2。这些值可在配置文件中修改。
+
+## 🧾 工具自描述（给 LLM/Agent）
+
+本插件的工具都支持自描述用法：调用时传 `help=true` 会返回参数与示例（不会执行实际操作）。
+
+- `group_discuss(help=true)`：讨论工具完整用法
+- `group_discuss_context(help=true)`：预算/派生上限输出说明
+- `session_manage(help=true)`：子会话管理用法
 
 ### `participants` 对象结构
 

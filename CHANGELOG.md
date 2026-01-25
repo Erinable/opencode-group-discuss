@@ -83,9 +83,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Documentation
 
 - README.md - Full project documentation
-- QUICKSTART.md - 5-minute getting started guide
-- DEVELOPMENT.md - Developer documentation
-- PROJECT_SUMMARY.md - Project overview
+- docs/QUICKSTART.md - 5-minute getting started guide
+- docs/DEVELOPMENT.md - Developer documentation
+- docs/PROJECT_SUMMARY.md - Project overview
 - Example configuration in templates/
 
 ## [Unreleased]

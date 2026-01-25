@@ -21,7 +21,7 @@ The project has transitioned from a monolithic prototype to a robust, component-
 *   **Refactor**: Split `Discussion.ts` into `DiscussionEngine` + `ResourceController`.
 *   **Node 20+**: Adoption of `AbortSignal.any` for leak-free signal combination.
 *   **Robustness**: Standardized error codes (`ETIMEDOUT`, etc.) and reliable retry logic.
-*   **DX**: Added `MIGRATION.md` and integration tests.
+*   **DX**: Added `docs/MIGRATION.md` and integration tests.
 
 ## Future Roadmap
 *   **Phase 4**: Advanced Modes (Brainstorming).
