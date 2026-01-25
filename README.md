@@ -261,6 +261,16 @@ Build Agent: 好的，我来启动一个群聊讨论。
     "min_confidence": 0.7,               // 最小置信度
     "enable_stalemate_detection": true,  // 启用僵局检测
     "stalemate_rounds": 3                // 僵局轮次阈值
+  },
+
+  // 上下文压缩配置
+  "context_compaction": {
+    "max_context_chars": 32000,          // 最大上下文字符数
+    "compaction_threshold": 0.8,         // 压缩触发阈值
+    "max_message_length": 500,           // 每条消息最大保留字符数
+    "preserve_recent_rounds": 1,         // 保留最近 N 轮完整发言
+    "enable_key_info_extraction": true,  // 启用关键信息提取
+    "include_self_history": false        // 是否包含当前 agent 的历史发言
   }
 }
 ```

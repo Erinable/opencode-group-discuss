@@ -5,6 +5,13 @@
 // Re-export consensus and termination types for convenience
 export type { ConsensusConfig, ConsensusReport } from '../core/consensus/types.js';
 export type { TerminationCondition, TerminationSignal } from '../core/termination/types.js';
+export type {
+  ContextCompactorConfig,
+  CompactedContext,
+  ContextSummary,
+  KeyInfo,
+  ContextState
+} from '../core/context/types.js';
 
 export interface DiscussionMessage {
   agent: string;

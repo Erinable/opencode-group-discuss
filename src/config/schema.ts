@@ -8,6 +8,7 @@
 
 import type { ConsensusConfig } from '../core/consensus/types.js';
 import type { TerminationConfig } from '../core/termination/types.js';
+import type { ContextCompactorConfig } from '../core/context/types.js';
 
 /**
  * Participant definition for presets
@@ -88,6 +89,27 @@ export interface TerminationConfigOverride {
 }
 
 /**
+ * Context compaction configuration
+ */
+export interface ContextCompactionConfigOverride {
+  /** Maximum context character count */
+  max_context_chars?: number;
+  /** Compaction trigger threshold (0-1) */
+  compaction_threshold?: number;
+  /** Max characters per message */
+  max_message_length?: number;
+  /** Preserve full messages in last N rounds */
+  preserve_recent_rounds?: number;
+  /** Enable key info extraction */
+  enable_key_info_extraction?: boolean;
+  /** Keyword weights for importance scoring */
+  keyword_weights?: Record<string, number>;
+
+  /** Include current agent's own history in injected context */
+  include_self_history?: boolean;
+}
+
+/**
  * Main configuration interface for group-discuss.json
  */
 export interface GroupDiscussConfig {
@@ -105,6 +127,9 @@ export interface GroupDiscussConfig {
 
   /** Termination condition configuration */
   termination?: TerminationConfigOverride;
+
+  /** Context compaction configuration */
+  context_compaction?: ContextCompactionConfigOverride;
 }
 
 /**
@@ -115,6 +140,7 @@ export const DEFAULT_CONFIG: {
   presets: Record<string, DiscussionPreset>;
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
+  context_compaction: Required<ContextCompactionConfigOverride>;
 } = {
   defaults: {
     mode: 'debate',
@@ -137,6 +163,15 @@ export const DEFAULT_CONFIG: {
     enable_stalemate_detection: true,
     stalemate_rounds: 3,
     disabled_conditions: [],
+  },
+  context_compaction: {
+    max_context_chars: 32000,
+    compaction_threshold: 0.8,
+    max_message_length: 500,
+    preserve_recent_rounds: 1,
+    enable_key_info_extraction: true,
+    keyword_weights: {},
+    include_self_history: false,
   },
 };
 

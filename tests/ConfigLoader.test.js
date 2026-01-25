@@ -62,6 +62,7 @@ test('ConfigLoader: returns default config when no config files exist', async ()
     assert.strictEqual(config.defaults.rounds, DEFAULT_CONFIG.defaults.rounds);
     assert.strictEqual(config.defaults.timeout, DEFAULT_CONFIG.defaults.timeout);
     assert.strictEqual(config.consensus.threshold, DEFAULT_CONFIG.consensus.threshold);
+    assert.strictEqual(config.context_compaction.max_context_chars, DEFAULT_CONFIG.context_compaction.max_context_chars);
 });
 
 test('ConfigLoader: loads project-level config', async () => {
@@ -220,6 +221,22 @@ test('ConfigLoader: getTerminationConfig returns merged config', async () => {
     assert.strictEqual(termination.min_confidence, 0.85);
     assert.deepStrictEqual(termination.disabled_conditions, ['timeout']);
     assert.strictEqual(termination.enable_stalemate_detection, DEFAULT_CONFIG.termination.enable_stalemate_detection);
+});
+
+test('ConfigLoader: getContextCompactionConfig returns merged config', async () => {
+    writeTestConfig(TEST_PROJECT_DIR, {
+        context_compaction: {
+            max_context_chars: 12000,
+            preserve_recent_rounds: 4
+        }
+    });
+
+    const loader = ConfigLoader.getInstance(TEST_PROJECT_DIR);
+    const contextConfig = await loader.getContextCompactionConfig();
+
+    assert.strictEqual(contextConfig.max_context_chars, 12000);
+    assert.strictEqual(contextConfig.preserve_recent_rounds, 4);
+    assert.strictEqual(contextConfig.compaction_threshold, DEFAULT_CONFIG.context_compaction.compaction_threshold);
 });
 
 test('ConfigLoader: consensus keyword_weights are merged', async () => {

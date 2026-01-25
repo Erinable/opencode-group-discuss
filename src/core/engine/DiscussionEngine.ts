@@ -15,6 +15,7 @@ import { CollaborativeMode } from '../../modes/CollaborativeMode.js';
 import { ConsensusEvaluator } from '../consensus/ConsensusEvaluator.js';
 import { TerminationManager } from '../termination/TerminationManager.js';
 import { getConfigLoader } from '../../config/ConfigLoader.js';
+import { ContextCompactor } from '../context/ContextCompactor.js';
 import type { ConsensusReport } from '../consensus/types.js';
 import type { TerminationContext } from '../termination/types.js';
 import * as path from 'path';
@@ -33,6 +34,7 @@ export class DiscussionEngine implements IDiscussionEngine {
   // P0: 新增共识评估器和终止管理器
   private consensusEvaluator!: ConsensusEvaluator;
   private terminationManager!: TerminationManager;
+  private contextCompactor!: ContextCompactor;
   private latestConsensusReport?: ConsensusReport;
   private terminationReason?: string;
   private earlyTermination: boolean = false;
@@ -94,12 +96,25 @@ export class DiscussionEngine implements IDiscussionEngine {
     for (const conditionName of fileConfig.termination.disabled_conditions) {
       this.terminationManager.removeCondition(conditionName);
     }
+
+    // Context compactor
+    const contextConfig = fileConfig.context_compaction;
+    this.contextCompactor = new ContextCompactor({
+      maxContextChars: contextConfig.max_context_chars,
+      compactionThreshold: contextConfig.compaction_threshold,
+      maxMessageLength: contextConfig.max_message_length,
+      preserveRecentRounds: contextConfig.preserve_recent_rounds,
+      enableKeyInfoExtraction: contextConfig.enable_key_info_extraction,
+      keywordWeights: contextConfig.keyword_weights,
+      includeSelfHistory: contextConfig.include_self_history,
+    });
     
     await this.logger.debug('DiscussionEngine initialized', { 
       mode: options.mode, 
       participants: options.participants.map(p => p.name),
       terminationConditions: this.terminationManager.getConditionNames(),
       consensusThreshold: mergedConsensusConfig.consensusThreshold,
+      contextCompactionThreshold: contextConfig.compaction_threshold,
     });
   }
 
@@ -379,22 +394,17 @@ export class DiscussionEngine implements IDiscussionEngine {
       return await this.buildInitialBackground();
     }
 
-    // Round 2+：返回上一轮其他人的发言
-    const prevRound = currentRound - 1;
-    const otherSpeakers = this.state.messages.filter(
-      m => m.round === prevRound && m.agent !== agentName
-    );
+    const compacted = await this.contextCompactor.buildContext(this.state.messages, {
+      currentRound,
+      agentName,
+      baseContext: `话题: ${this.state.topic}`,
+    });
 
-    if (otherSpeakers.length === 0) {
-      return `话题: ${this.state.topic}\n（上一轮暂无其他人发言）`;
+    if (!compacted.content) {
+      return `话题: ${this.state.topic}\n（暂无历史发言）`;
     }
 
-    let context = `【第 ${prevRound} 轮其他成员发言】\n`;
-    for (const m of otherSpeakers) {
-      context += `\n@${m.agent}:\n${m.content}\n`;
-    }
-
-    return context;
+    return compacted.content;
   }
 
   private buildPromptForAgent(name: string, participant: DiscussionParticipant, context: string): string {
@@ -620,4 +630,3 @@ ${context}
      }
    }
  }
-

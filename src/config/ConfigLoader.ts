@@ -14,6 +14,7 @@ import type {
   DiscussionDefaults,
   ConsensusConfigOverride,
   TerminationConfigOverride,
+  ContextCompactionConfigOverride,
 } from './schema.js';
 import { DEFAULT_CONFIG, CONFIG_FILE_NAME } from './schema.js';
 
@@ -25,6 +26,7 @@ export interface ResolvedConfig {
   presets: Record<string, DiscussionPreset>;
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
+  context_compaction: Required<ContextCompactionConfigOverride>;
 }
 
 /**
@@ -115,6 +117,14 @@ export class ConfigLoader {
   async getTerminationConfig(): Promise<Required<TerminationConfigOverride>> {
     const config = await this.loadConfig();
     return config.termination;
+  }
+
+  /**
+   * Get context compaction configuration
+   */
+  async getContextCompactionConfig(): Promise<Required<ContextCompactionConfigOverride>> {
+    const config = await this.loadConfig();
+    return config.context_compaction;
   }
 
   /**
@@ -211,6 +221,18 @@ export class ConfigLoader {
           disabled_conditions: config.termination.disabled_conditions ?? result.termination?.disabled_conditions,
         };
       }
+
+      // Merge context compaction config
+      if (config.context_compaction) {
+        result.context_compaction = {
+          ...result.context_compaction,
+          ...config.context_compaction,
+          keyword_weights: {
+            ...result.context_compaction?.keyword_weights,
+            ...config.context_compaction.keyword_weights,
+          },
+        };
+      }
     }
 
     return result;
@@ -243,6 +265,15 @@ export class ConfigLoader {
         enable_stalemate_detection: config.termination?.enable_stalemate_detection ?? DEFAULT_CONFIG.termination.enable_stalemate_detection,
         stalemate_rounds: config.termination?.stalemate_rounds ?? DEFAULT_CONFIG.termination.stalemate_rounds,
         disabled_conditions: config.termination?.disabled_conditions ?? [],
+      },
+      context_compaction: {
+        max_context_chars: config.context_compaction?.max_context_chars ?? DEFAULT_CONFIG.context_compaction.max_context_chars,
+        compaction_threshold: config.context_compaction?.compaction_threshold ?? DEFAULT_CONFIG.context_compaction.compaction_threshold,
+        max_message_length: config.context_compaction?.max_message_length ?? DEFAULT_CONFIG.context_compaction.max_message_length,
+        preserve_recent_rounds: config.context_compaction?.preserve_recent_rounds ?? DEFAULT_CONFIG.context_compaction.preserve_recent_rounds,
+        enable_key_info_extraction: config.context_compaction?.enable_key_info_extraction ?? DEFAULT_CONFIG.context_compaction.enable_key_info_extraction,
+        keyword_weights: config.context_compaction?.keyword_weights ?? {},
+        include_self_history: config.context_compaction?.include_self_history ?? DEFAULT_CONFIG.context_compaction.include_self_history,
       },
     };
   }
