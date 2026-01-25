@@ -494,6 +494,10 @@ ${context}
       const runCall = async () => {
         if (this.client?.session?.prompt) {
             await this.logger.debug(`[InvokeStart] Calling session.prompt for agent ${agentType} in session ${sessionId}`);
+            
+            // 短暂延迟确保会话完全初始化
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             try {
                 const res = await this.client.session.prompt({
                     body: {
@@ -514,11 +518,31 @@ ${context}
                 
                 return this.extractTextFromResponse(res);
             } catch (promptError: any) {
-                await this.logger.error(`[PromptError] Agent ${agentType} prompt failed:`, {
+                // 尝试获取更多错误信息
+                const errorInfo: Record<string, any> = {
                     error: promptError?.message || String(promptError),
                     code: promptError?.code,
                     name: promptError?.name,
-                });
+                    stack: promptError?.stack?.slice(0, 500),
+                };
+                
+                // 如果有 response 或 request 信息也记录
+                if (promptError?.response) {
+                    errorInfo.responseStatus = promptError.response.status;
+                    errorInfo.responseStatusText = promptError.response.statusText;
+                }
+                if (promptError?.request) {
+                    errorInfo.requestUrl = promptError.request.url;
+                }
+                
+                // 检查是否有嵌套的错误信息
+                if (promptError?.error) {
+                    errorInfo.nestedError = typeof promptError.error === 'object' 
+                        ? JSON.stringify(promptError.error).slice(0, 500)
+                        : String(promptError.error);
+                }
+                
+                await this.logger.error(`[PromptError] Agent ${agentType} prompt failed:`, errorInfo);
                 throw promptError;
             }
         }
