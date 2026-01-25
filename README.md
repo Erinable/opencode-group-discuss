@@ -2,8 +2,6 @@
 
 🎯 多Agent群聊讨论插件，让OpenCode的AI agents能够协作辩论和讨论问题。
 
-> ⚠️ **v0.3.0 重要更新**: 本版本引入了破坏性变更（Node >= 20, 错误码标准化）。请参考 [迁移指南 (docs/MIGRATION.md)](./docs/MIGRATION.md)。
-
 ## ✨ 特性
 
 - 🗣️ **多Agent辩论** - 正方、反方、裁判三方讨论
@@ -52,6 +50,8 @@ cp templates/opencode.example.json opencode.json
 你可以用 `group_discuss_context` 查看当前生效的预算与推导后的字符上限（便于端到端调试/断言）。
 
 ## 🚀 快速开始
+
+想要更短路径的 5 分钟上手：[`docs/QUICKSTART.md`](./docs/QUICKSTART.md)。
 
 ### 1. 配置 Agents
 
@@ -249,6 +249,10 @@ Build Agent: 好的，我来启动一个群聊讨论。
 
 ## ⚙️ 配置文件
 
+配置详解见：[`docs/CONFIG.md`](./docs/CONFIG.md)。
+
+提示：当前 `group_discuss` tool 只会从配置的 `defaults` 读取 `mode/rounds/verbose/keep_sessions`，其余 defaults 字段请以 `docs/CONFIG.md` 的“当前实现说明”为准。
+
 ### 配置文件位置
 
 插件支持两级配置文件，按优先级从高到低：
@@ -260,114 +264,69 @@ Build Agent: 好的，我来启动一个群聊讨论。
 
 ### 配置结构
 
-```json
-{
-  // 默认参数
-  "defaults": {
-    "mode": "debate",           // 默认讨论模式
-    "rounds": 3,                // 默认轮数
-    "timeout": 600000,          // 超时时间（毫秒）
-    "concurrency": 2,           // 并发调用数
-    "verbose": true,            // 显示详细输出
-    "keep_sessions": false,     // 保留子会话（调试用）
-    "max_retries": 3            // 最大重试次数
-  },
+README 里不再复制完整字段清单（避免与配置文档重复）。
 
-  // 预设配置
-  "presets": {
-    "tech-review": {
-      "agents": ["advocate", "critic", "moderator"],
-      "mode": "debate",
-      "rounds": 3
-    },
-    "architecture": {
-      "participants": [
-        { "name": "Architect", "subagent_type": "critic", "role": "系统架构设计" },
-        { "name": "DBA", "subagent_type": "general", "role": "数据库选型" },
-        { "name": "Security", "subagent_type": "critic", "role": "安全审计" }
-      ],
-      "mode": "collaborative",
-      "rounds": 5
-    }
-  },
+- 字段/合并规则详解：[`docs/CONFIG.md`](./docs/CONFIG.md)
+- 最小配置示例：[`examples/group-discuss.example.jsonc`](./examples/group-discuss.example.jsonc)
+- 全字段示例：`examples/group-discuss.full.jsonc`
 
-  // 共识评估配置
-  "consensus": {
-    "threshold": 0.8,                    // 共识度阈值
-    "enable_convergence_analysis": true, // 启用趋同分析
-    "stalemate_window": 2                // 僵局检测窗口
-  },
+安全与边界说明：见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)。
 
-  // 终止条件配置
-  "termination": {
-    "min_confidence": 0.7,               // 最小置信度
-    "enable_stalemate_detection": true,  // 启用僵局检测
-    "stalemate_rounds": 3                // 僵局轮次阈值
-  },
+## 🧰 Troubleshooting / FAQ
 
-  // 上下文压缩配置
-  // 推荐：用 context_budget 管理预算，避免手填字符数
-  "context_budget": {
-    "profile": "balanced",             // small | balanced | large
-    "input_tokens": 6000,               // 注入上下文的 token 预算
-    "min_output_tokens": 512,           // 预留给模型输出的 token
-    "reasoning_headroom_tokens": 0,     // 预留给推理 token（按模型需要调整）
-    "chars_per_token": 4                // 估算换算（英文常用 4；CJK 可调小）
-  },
+### 1) OpenCode 找不到工具（没有 `group_discuss` / `group_discuss_context`）
 
-  // 上下文压缩配置
-  "context_compaction": {
-    "max_context_chars": "auto",        // 最大上下文字符数（auto 由 context_budget 推导）
-    "compaction_threshold": 0.8,         // 压缩触发阈值
-    "max_message_length": "auto",       // 每条消息最大保留字符数（auto 由 profile 推导）
-    "preserve_recent_rounds": 1,         // 保留最近 N 轮完整发言
-    "enable_key_info_extraction": true,  // 启用关键信息提取
-    "include_self_history": false        // 是否包含当前 agent 的历史发言
-  },
+- 确认你在项目根目录安装了依赖（推荐）：
 
-  // 日志配置
-  "logging": {
-    "level": "info",                   // error | warn | info | debug
-    "console_enabled": true,            // 输出到 console
-    "file_enabled": true,               // 输出到文件
-    "file_path": "group_discuss.log",  // 日志文件路径（相对路径基于 cwd）
-    "include_meta": true,               // 是否输出 meta
-    "max_entry_chars": 8000,            // 单条日志最大字符数
-    "max_meta_chars": 4000              // meta 最大字符数
-  },
-
-  // Debug 开关（会自动提升日志 level 到 debug）
-  "debug": {
-    "log_prompts": false,               // 记录发给 agent 的 prompt
-    "log_context": false,               // 记录注入给 agent 的上下文
-    "log_compaction": false             // 记录上下文压缩决策与统计
-  }
-}
+```bash
+npm ls opencode-group-discuss
 ```
 
-日志/诊断安全说明：
-- `diagnose=true` 的环境变量输出为 presence-only（`[SET]` / `[NOT SET]`），不会打印实际值。
-- 日志会对 token-like 内容做基础脱敏（Bearer/JWT/sk-*/querystring secret）。
-- 开启 debug 级别日志仍可能包含 prompt/context 的业务内容，请谨慎用于包含敏感信息的项目。
-
-### 预设使用示例
-
-定义预设后，可以通过 `preset` 参数快速使用：
+- 确认项目根目录 `opencode.json` 启用了插件：
 
 ```json
-// 使用 tech-review 预设
-{ "topic": "REST vs GraphQL", "preset": "tech-review" }
-
-// 预设 + 覆盖部分参数
-{ "topic": "数据库选型", "preset": "tech-review", "rounds": 5 }
-
-// 预设 + 额外上下文
-{ "topic": "审查 PR #123", "preset": "code-review", "files": ["src/api/users.ts"] }
+{ "plugin": ["opencode-group-discuss"] }
 ```
 
-> **提示**：完整的配置示例请参考 [`examples/group-discuss.example.jsonc`](./examples/group-discuss.example.jsonc)。
+- 在 OpenCode 内调用 `group_discuss(help=true)` 看是否能返回自描述帮助。
+- 安装/配置变更后，重启 OpenCode 进程（避免旧的插件加载状态）。
+
+### 2) `diagnose=true` 怎么用？
+
+- `group_discuss({ diagnose: true, topic: "..." })` 会输出：client 能力（是否有 session.create/delete）、以及简化的 env presence-only 信息。
+- 如果看到 `Unauthorized`/`401`，通常是 OpenCode Desktop 的认证信息未正确注入（已知问题）。
+  - 临时方案：用 CLI 版本 `opencode` 运行，或确认 Desktop 已登录/已配置 token。
+
+### 3) 配置文件加载失败（JSON 语法错误）
+
+- 报错示例：`Failed to load config ... SyntaxError: ...`
+- 配置位置：
+  - 项目级：`.opencode/group-discuss.json`
+  - 全局级：`~/.config/opencode/group-discuss.json`
+- 处理方式：
+  - 先用最小配置验证能跑通，再逐步加字段
+  - 避免不合法的 JSON（比如多余逗号、未加引号的 key 等）
+
+### 4) `files` 被拒绝/读取失败（`E_FILE_SANDBOX` / `E_FILE_NOT_FOUND` / `E_FILE_TOO_LARGE`）
+
+- `files` 只允许读取“OpenCode 项目根目录”内的文件，并做了 `realpath` 边界校验（防止 symlink 逃逸）。
+- 常见原因：
+  - 传了项目外的绝对路径（会被拒绝）
+  - 传了 `../` 逃逸路径（会被拒绝）
+  - 文件确实不存在或拼写错误（`E_FILE_NOT_FOUND`）
+  - 超过限制：最多 10 个文件；单文件最大 256 KiB；总计最大 1 MiB（会 fail-closed）
+- 建议：用相对路径（相对项目根目录），并先手动确认文件存在。
+
+### 5) 预算/字符上限相关问题
+
+- 用 `group_discuss_context(help=true)` 查看预算推导规则
+- 用 `group_discuss_context({ help: false })` 查看当前生效的 context_budget 与派生上限
 
 ## 🔧 开发
+
+## 🏗️ 架构文档
+
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)：整体架构、数据流、安全边界与扩展点
 
 ```bash
 # 克隆仓库

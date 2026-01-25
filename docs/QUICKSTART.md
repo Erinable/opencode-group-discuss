@@ -125,6 +125,11 @@ AI: 我来组织一个讨论
 - 文档: ../README.md
 - 开发指南: DEVELOPMENT.md
 
+更多：
+
+- 配置详解：CONFIG.md
+- 架构说明：ARCHITECTURE.md
+
 ## 📄 许可证
 
 MIT License
