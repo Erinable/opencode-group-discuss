@@ -271,6 +271,24 @@ Build Agent: 好的，我来启动一个群聊讨论。
     "preserve_recent_rounds": 1,         // 保留最近 N 轮完整发言
     "enable_key_info_extraction": true,  // 启用关键信息提取
     "include_self_history": false        // 是否包含当前 agent 的历史发言
+  },
+
+  // 日志配置
+  "logging": {
+    "level": "info",                   // error | warn | info | debug
+    "console_enabled": true,            // 输出到 console
+    "file_enabled": true,               // 输出到文件
+    "file_path": "group_discuss.log",  // 日志文件路径（相对路径基于 cwd）
+    "include_meta": true,               // 是否输出 meta
+    "max_entry_chars": 8000,            // 单条日志最大字符数
+    "max_meta_chars": 4000              // meta 最大字符数
+  },
+
+  // Debug 开关（会自动提升日志 level 到 debug）
+  "debug": {
+    "log_prompts": false,               // 记录发给 agent 的 prompt
+    "log_context": false,               // 记录注入给 agent 的上下文
+    "log_compaction": false             // 记录上下文压缩决策与统计
   }
 }
 ```

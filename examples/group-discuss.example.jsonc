@@ -99,5 +99,23 @@
       // "确认": 0.8,
       // "否决": -0.8
     }
+  },
+
+  // 日志配置
+  "logging": {
+    "level": "info",                   // error | warn | info | debug
+    "console_enabled": true,
+    "file_enabled": true,
+    "file_path": "group_discuss.log",
+    "include_meta": true,
+    "max_entry_chars": 8000,
+    "max_meta_chars": 4000
+  },
+
+  // Debug 开关（会自动提升日志 level 到 debug）
+  "debug": {
+    "log_prompts": false,
+    "log_context": false,
+    "log_compaction": false
   }
 }

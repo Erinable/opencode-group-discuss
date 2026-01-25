@@ -3,9 +3,29 @@ import * as path from "path";
 
 const LOG_PREFIX = "[GroupDiscuss]";
 const LOG_TIMEOUT_MS = 8000;
-const LOG_FILE_PATH = path.resolve(process.cwd(), "group_discuss.log");
 
 export type LogLevel = "info" | "warn" | "error" | "debug";
+
+export interface LoggerDebugOptions {
+  logPrompts: boolean;
+  logContext: boolean;
+  logCompaction: boolean;
+}
+
+export interface LoggerOptions {
+  level: LogLevel;
+  consoleEnabled: boolean;
+  fileEnabled: boolean;
+  filePath: string;
+  includeMeta: boolean;
+  maxEntryChars: number;
+  maxMetaChars: number;
+}
+
+export interface LoggerConfig {
+  logging?: Partial<LoggerOptions>;
+  debug?: Partial<LoggerDebugOptions>;
+}
 
 /**
  * Lightweight logger that prefers the OpenCode SDK client
@@ -15,10 +35,64 @@ export type LogLevel = "info" | "warn" | "error" | "debug";
 export class Logger {
   private client: any;
   private service: string;
+  private options: LoggerOptions;
+  private debugOptions: LoggerDebugOptions;
 
-  constructor(client?: any, service: string = "group-discuss") {
+  constructor(client?: any, service: string = "group-discuss", config: LoggerConfig = {}) {
     this.client = client;
     this.service = service;
+
+    const defaults: LoggerOptions = {
+      level: "info",
+      consoleEnabled: true,
+      fileEnabled: true,
+      filePath: path.resolve(process.cwd(), "group_discuss.log"),
+      includeMeta: true,
+      maxEntryChars: 8000,
+      maxMetaChars: 4000,
+    };
+
+    const debugDefaults: LoggerDebugOptions = {
+      logPrompts: false,
+      logContext: false,
+      logCompaction: false,
+    };
+
+    this.options = this.applyEnvOverrides({
+      ...defaults,
+      ...(config.logging || {}),
+      filePath: this.resolveFilePath((config.logging || {}).filePath ?? defaults.filePath),
+    });
+
+    this.debugOptions = this.applyDebugEnvOverrides({
+      ...debugDefaults,
+      ...(config.debug || {}),
+    });
+
+    // If debug instrumentation is enabled, prefer debug level unless caller explicitly set it.
+    if (
+      this.debugOptions.logPrompts ||
+      this.debugOptions.logContext ||
+      this.debugOptions.logCompaction
+    ) {
+      const envLevel = process.env.GROUP_DISCUSS_LOG_LEVEL as LogLevel | undefined;
+      const explicit = (config.logging || {}).level;
+      if (!envLevel && !explicit) {
+        this.options.level = "debug";
+      }
+    }
+  }
+
+  getLoggingOptions(): LoggerOptions {
+    return this.options;
+  }
+
+  getDebugOptions(): LoggerDebugOptions {
+    return this.debugOptions;
+  }
+
+  isEnabled(level: LogLevel): boolean {
+    return this.shouldLog(level);
   }
 
   async info(message: string, meta?: Record<string, any>): Promise<void> {
@@ -49,13 +123,18 @@ export class Logger {
     message: string,
     meta?: Record<string, any>
   ): Promise<void> {
+    if (!this.shouldLog(level)) return;
+
     const text = `${LOG_PREFIX} ${message}`;
     const timestamp = new Date().toISOString();
-    const metaString = meta ? ` | meta=${this.formatMeta(meta)}` : "";
-    const fileLogLine = `${timestamp} [${level.toUpperCase()}] ${text}${metaString}\n`;
+    const metaString = this.options.includeMeta && meta ? ` | meta=${this.formatMeta(meta)}` : "";
+    const rawLine = `${timestamp} [${level.toUpperCase()}] ${text}${metaString}`;
+    const fileLogLine = `${this.truncateLine(rawLine, this.options.maxEntryChars)}\n`;
 
     try {
-      fs.appendFileSync(LOG_FILE_PATH, fileLogLine);
+      if (this.options.fileEnabled) {
+        fs.appendFileSync(this.options.filePath, fileLogLine);
+      }
     } catch (err) {
       // Silently fail for file logging to not disrupt main flow
     }
@@ -90,8 +169,12 @@ export class Logger {
       this.fallback("error", `log send failed: ${this.formatError(err)}`);
     }
 
-    const withMeta = meta ? `${text} | meta=${this.formatMeta(meta)}` : text;
-    this.fallback(level, withMeta);
+    if (this.options.consoleEnabled) {
+      const withMeta = this.options.includeMeta && meta
+        ? `${text} | meta=${this.formatMeta(meta)}`
+        : text;
+      this.fallback(level, this.truncateLine(withMeta, this.options.maxEntryChars));
+    }
   }
 
   private fallback(level: LogLevel, message: string) {
@@ -109,7 +192,13 @@ export class Logger {
 
   private formatMeta(meta: Record<string, any>): string {
     try {
-      return JSON.stringify(meta);
+      const json = JSON.stringify(meta, (_key, value) => {
+        if (typeof value === "string") {
+          return this.truncateLine(value, this.options.maxMetaChars);
+        }
+        return value;
+      });
+      return this.truncateLine(json, this.options.maxMetaChars);
     } catch {
       return String(meta);
     }
@@ -120,5 +209,88 @@ export class Logger {
       return error.stack || error.message;
     }
     return typeof error === "string" ? error : JSON.stringify(error);
+  }
+
+  private truncateLine(value: string, maxChars: number): string {
+    if (!maxChars || maxChars <= 0) return value;
+    if (value.length <= maxChars) return value;
+    return `${value.slice(0, Math.max(0, maxChars - 1))}…`;
+  }
+
+  private resolveFilePath(p: string): string {
+    if (!p) return path.resolve(process.cwd(), "group_discuss.log");
+    return path.isAbsolute(p) ? p : path.resolve(process.cwd(), p);
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const order: Record<LogLevel, number> = {
+      error: 0,
+      warn: 1,
+      info: 2,
+      debug: 3,
+    };
+    return order[level] <= order[this.options.level];
+  }
+
+  private applyEnvOverrides(options: LoggerOptions): LoggerOptions {
+    const env = process.env;
+
+    const debugAll = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG);
+    const debugPrompts = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_PROMPTS);
+    const debugContext = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_CONTEXT);
+    const debugCompaction = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_COMPACTION);
+    const wantsDebug = !!(debugAll || debugPrompts || debugContext || debugCompaction);
+
+    const level = env.GROUP_DISCUSS_LOG_LEVEL as LogLevel | undefined;
+    const filePath = env.GROUP_DISCUSS_LOG_FILE;
+    const fileEnabled = this.parseEnvBool(env.GROUP_DISCUSS_LOG_FILE_ENABLED);
+    const consoleEnabled = this.parseEnvBool(env.GROUP_DISCUSS_LOG_CONSOLE_ENABLED);
+    const includeMeta = this.parseEnvBool(env.GROUP_DISCUSS_LOG_INCLUDE_META);
+    const maxEntryChars = this.parseEnvInt(env.GROUP_DISCUSS_LOG_MAX_ENTRY_CHARS);
+    const maxMetaChars = this.parseEnvInt(env.GROUP_DISCUSS_LOG_MAX_META_CHARS);
+
+    return {
+      ...options,
+      level: level ?? (wantsDebug ? "debug" : options.level),
+      fileEnabled: typeof fileEnabled === "boolean" ? fileEnabled : options.fileEnabled,
+      consoleEnabled: typeof consoleEnabled === "boolean" ? consoleEnabled : options.consoleEnabled,
+      includeMeta: typeof includeMeta === "boolean" ? includeMeta : options.includeMeta,
+      maxEntryChars: typeof maxEntryChars === "number" ? maxEntryChars : options.maxEntryChars,
+      maxMetaChars: typeof maxMetaChars === "number" ? maxMetaChars : options.maxMetaChars,
+      filePath: filePath ? this.resolveFilePath(filePath) : options.filePath,
+    };
+  }
+
+  private applyDebugEnvOverrides(options: LoggerDebugOptions): LoggerDebugOptions {
+    const env = process.env;
+    const debugAll = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG);
+    const logPrompts = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_PROMPTS);
+    const logContext = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_CONTEXT);
+    const logCompaction = this.parseEnvBool(env.GROUP_DISCUSS_DEBUG_COMPACTION);
+
+    const basePrompts = debugAll ? true : options.logPrompts;
+    const baseContext = debugAll ? true : options.logContext;
+    const baseCompaction = debugAll ? true : options.logCompaction;
+
+    return {
+      ...options,
+      logPrompts: typeof logPrompts === "boolean" ? logPrompts : basePrompts,
+      logContext: typeof logContext === "boolean" ? logContext : baseContext,
+      logCompaction: typeof logCompaction === "boolean" ? logCompaction : baseCompaction,
+    };
+  }
+
+  private parseEnvBool(value: string | undefined): boolean | undefined {
+    if (value == null) return undefined;
+    const v = value.trim().toLowerCase();
+    if (["1", "true", "yes", "y", "on"].includes(v)) return true;
+    if (["0", "false", "no", "n", "off"].includes(v)) return false;
+    return undefined;
+  }
+
+  private parseEnvInt(value: string | undefined): number | undefined {
+    if (value == null) return undefined;
+    const n = Number.parseInt(value, 10);
+    return Number.isFinite(n) ? n : undefined;
   }
 }

@@ -15,6 +15,8 @@ import type {
   ConsensusConfigOverride,
   TerminationConfigOverride,
   ContextCompactionConfigOverride,
+  LoggingConfigOverride,
+  DebugConfigOverride,
 } from './schema.js';
 import { DEFAULT_CONFIG, CONFIG_FILE_NAME } from './schema.js';
 
@@ -27,6 +29,8 @@ export interface ResolvedConfig {
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
   context_compaction: Required<ContextCompactionConfigOverride>;
+  logging: Required<LoggingConfigOverride>;
+  debug: Required<DebugConfigOverride>;
 }
 
 /**
@@ -233,6 +237,22 @@ export class ConfigLoader {
           },
         };
       }
+
+      // Merge logging config
+      if (config.logging) {
+        result.logging = {
+          ...result.logging,
+          ...config.logging,
+        };
+      }
+
+      // Merge debug config
+      if (config.debug) {
+        result.debug = {
+          ...result.debug,
+          ...config.debug,
+        };
+      }
     }
 
     return result;
@@ -274,6 +294,22 @@ export class ConfigLoader {
         enable_key_info_extraction: config.context_compaction?.enable_key_info_extraction ?? DEFAULT_CONFIG.context_compaction.enable_key_info_extraction,
         keyword_weights: config.context_compaction?.keyword_weights ?? {},
         include_self_history: config.context_compaction?.include_self_history ?? DEFAULT_CONFIG.context_compaction.include_self_history,
+      },
+
+      logging: {
+        level: config.logging?.level ?? DEFAULT_CONFIG.logging.level,
+        console_enabled: config.logging?.console_enabled ?? DEFAULT_CONFIG.logging.console_enabled,
+        file_enabled: config.logging?.file_enabled ?? DEFAULT_CONFIG.logging.file_enabled,
+        file_path: config.logging?.file_path ?? DEFAULT_CONFIG.logging.file_path,
+        include_meta: config.logging?.include_meta ?? DEFAULT_CONFIG.logging.include_meta,
+        max_entry_chars: config.logging?.max_entry_chars ?? DEFAULT_CONFIG.logging.max_entry_chars,
+        max_meta_chars: config.logging?.max_meta_chars ?? DEFAULT_CONFIG.logging.max_meta_chars,
+      },
+
+      debug: {
+        log_prompts: config.debug?.log_prompts ?? DEFAULT_CONFIG.debug.log_prompts,
+        log_context: config.debug?.log_context ?? DEFAULT_CONFIG.debug.log_context,
+        log_compaction: config.debug?.log_compaction ?? DEFAULT_CONFIG.debug.log_compaction,
       },
     };
   }

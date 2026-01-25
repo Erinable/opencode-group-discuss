@@ -317,6 +317,18 @@ export class DiscussionEngine implements IDiscussionEngine {
     // 为该 Agent 构建增量上下文（只包含上一轮其他人的发言）
     const context = await this.buildContextForAgent(name);
     const prompt = this.buildPromptForAgent(name, participant, context);
+
+    const dbg = this.logger.getDebugOptions();
+    if (dbg.logPrompts && this.logger.isEnabled('debug')) {
+      await this.logger.debug('Built agent prompt', {
+        agent: name,
+        subagent_type: participant.subagentType,
+        round: this.state.currentRound,
+        promptLength: prompt.length,
+        prompt,
+      });
+    }
+
     const engineSignal = signal ?? this.abortController.signal;
     
     const agentSessionID = await this.getAgentSessionID(name, engineSignal);
@@ -399,6 +411,30 @@ export class DiscussionEngine implements IDiscussionEngine {
       agentName,
       baseContext: `话题: ${this.state.topic}`,
     });
+
+    const dbg = this.logger.getDebugOptions();
+
+    if (dbg.logCompaction && this.logger.isEnabled('debug')) {
+      await this.logger.debug('Context build result', {
+        agent: agentName,
+        round: currentRound,
+        wasCompacted: compacted.wasCompacted,
+        originalLength: compacted.originalLength,
+        compactedLength: compacted.compactedLength,
+        compressionRatio: compacted.compressionRatio,
+        preservedKeyInfoCount: compacted.preservedKeyInfo?.length ?? 0,
+        summary: compacted.summary?.progressOverview,
+      });
+    }
+
+    if (dbg.logContext && this.logger.isEnabled('debug')) {
+      await this.logger.debug('Injected context text', {
+        agent: agentName,
+        round: currentRound,
+        contextLength: compacted.content.length,
+        context: compacted.content,
+      });
+    }
 
     if (!compacted.content) {
       return `话题: ${this.state.topic}\n（暂无历史发言）`;

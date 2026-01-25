@@ -8,7 +8,6 @@
 
 import type { ConsensusConfig } from '../core/consensus/types.js';
 import type { TerminationConfig } from '../core/termination/types.js';
-import type { ContextCompactorConfig } from '../core/context/types.js';
 
 /**
  * Participant definition for presets
@@ -110,6 +109,46 @@ export interface ContextCompactionConfigOverride {
 }
 
 /**
+ * Logging configuration
+ */
+export interface LoggingConfigOverride {
+  /** Minimum log level */
+  level?: 'error' | 'warn' | 'info' | 'debug';
+
+  /** Enable console logging */
+  console_enabled?: boolean;
+
+  /** Enable file logging */
+  file_enabled?: boolean;
+
+  /** File path for logs (relative paths are resolved from process.cwd()) */
+  file_path?: string;
+
+  /** Include meta payload in log output */
+  include_meta?: boolean;
+
+  /** Max characters per log entry (message + meta) */
+  max_entry_chars?: number;
+
+  /** Max characters for meta JSON stringification */
+  max_meta_chars?: number;
+}
+
+/**
+ * Debug instrumentation switches
+ */
+export interface DebugConfigOverride {
+  /** Log full prompts (truncated by logger limits) */
+  log_prompts?: boolean;
+
+  /** Log built context injected to agents (truncated by logger limits) */
+  log_context?: boolean;
+
+  /** Log context compaction decision + stats */
+  log_compaction?: boolean;
+}
+
+/**
  * Main configuration interface for group-discuss.json
  */
 export interface GroupDiscussConfig {
@@ -130,6 +169,12 @@ export interface GroupDiscussConfig {
 
   /** Context compaction configuration */
   context_compaction?: ContextCompactionConfigOverride;
+
+  /** Logging configuration */
+  logging?: LoggingConfigOverride;
+
+  /** Debug instrumentation */
+  debug?: DebugConfigOverride;
 }
 
 /**
@@ -141,6 +186,8 @@ export const DEFAULT_CONFIG: {
   consensus: Required<ConsensusConfigOverride>;
   termination: Required<TerminationConfigOverride>;
   context_compaction: Required<ContextCompactionConfigOverride>;
+  logging: Required<LoggingConfigOverride>;
+  debug: Required<DebugConfigOverride>;
 } = {
   defaults: {
     mode: 'debate',
@@ -172,6 +219,22 @@ export const DEFAULT_CONFIG: {
     enable_key_info_extraction: true,
     keyword_weights: {},
     include_self_history: false,
+  },
+
+  logging: {
+    level: 'info',
+    console_enabled: true,
+    file_enabled: true,
+    file_path: 'group_discuss.log',
+    include_meta: true,
+    max_entry_chars: 8000,
+    max_meta_chars: 4000,
+  },
+
+  debug: {
+    log_prompts: false,
+    log_context: false,
+    log_compaction: false,
   },
 };
 

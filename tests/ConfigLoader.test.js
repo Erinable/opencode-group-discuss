@@ -63,6 +63,8 @@ test('ConfigLoader: returns default config when no config files exist', async ()
     assert.strictEqual(config.defaults.timeout, DEFAULT_CONFIG.defaults.timeout);
     assert.strictEqual(config.consensus.threshold, DEFAULT_CONFIG.consensus.threshold);
     assert.strictEqual(config.context_compaction.max_context_chars, DEFAULT_CONFIG.context_compaction.max_context_chars);
+    assert.strictEqual(config.logging.level, DEFAULT_CONFIG.logging.level);
+    assert.strictEqual(config.debug.log_prompts, DEFAULT_CONFIG.debug.log_prompts);
 });
 
 test('ConfigLoader: loads project-level config', async () => {

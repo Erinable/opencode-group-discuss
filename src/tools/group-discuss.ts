@@ -14,8 +14,6 @@ import * as fs from "fs";
 import * as path from "path";
 
 export function createGroupDiscussTool(client: any): any {
-  const boundLogger = new Logger(client);
-
   return tool({
     description: `启动多 Agent 群聊讨论（支持已注册 agent 与临时参与者）。
 
@@ -134,12 +132,30 @@ export function createGroupDiscussTool(client: any): any {
       } = args;
       // ToolContext 只包含 sessionID, messageID, agent, abort
       const { sessionID } = context;
-      const logger = boundLogger;
-
       // 加载配置文件
       const configLoader = getConfigLoader();
       const config = await configLoader.loadConfig();
       const defaults = config.defaults;
+
+      const forceDebugLevel = !!(config.debug.log_prompts || config.debug.log_context || config.debug.log_compaction);
+      const effectiveLevel = forceDebugLevel ? "debug" : config.logging.level;
+
+      const logger = new Logger(client, "group-discuss", {
+        logging: {
+          level: effectiveLevel,
+          consoleEnabled: config.logging.console_enabled,
+          fileEnabled: config.logging.file_enabled,
+          filePath: config.logging.file_path,
+          includeMeta: config.logging.include_meta,
+          maxEntryChars: config.logging.max_entry_chars,
+          maxMetaChars: config.logging.max_meta_chars,
+        },
+        debug: {
+          logPrompts: config.debug.log_prompts,
+          logContext: config.debug.log_context,
+          logCompaction: config.debug.log_compaction,
+        },
+      });
 
       // 如果指定了 preset，加载预设配置
       let presetConfig: DiscussionPreset | undefined;
