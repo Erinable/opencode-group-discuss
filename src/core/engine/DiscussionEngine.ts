@@ -19,6 +19,7 @@ import { ContextCompactor } from '../context/ContextCompactor.js';
 import type { ConsensusReport } from '../consensus/types.js';
 import type { TerminationContext } from '../termination/types.js';
 import * as path from 'path';
+import * as util from 'util';
 
 export class DiscussionEngine implements IDiscussionEngine {
   private options!: EngineOptions;
@@ -500,6 +501,15 @@ ${context}
                 path: { id: sessionId },
                 signal: combinedSignal
             });
+            
+            // Debug: log raw response to help troubleshoot empty messages
+            if (this.logger.isEnabled('debug')) {
+                await this.logger.debug(`[RawResponse] Agent ${agentType} returned:`, { 
+                    resType: typeof res, 
+                    preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+                });
+            }
+            
             return this.extractTextFromResponse(res);
         }
 
@@ -512,6 +522,14 @@ ${context}
                 path: { id: sessionId },
                 signal: combinedSignal
             });
+
+            if (this.logger.isEnabled('debug')) {
+                await this.logger.debug(`[RawResponse] Client.prompt Agent ${agentType} returned:`, { 
+                    resType: typeof res, 
+                    preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+                });
+            }
+
             return this.extractTextFromResponse(res);
         }
 
@@ -527,16 +545,57 @@ ${context}
 
 
   private extractTextFromResponse(res: any): string {
+    if (res === null || res === undefined) return '';
     if (typeof res === "string") return res;
+
     const data = res?.data || res;
+    
+    // 1. 标准 OpenCode SDK 响应结构 (data.parts)
     if (data?.parts && Array.isArray(data.parts)) {
+      // 优先查找 text 类型的 part
       const textPart = data.parts.find((p: any) => p.type === "text");
       if (textPart?.text) return textPart.text;
+      
+      // 如果没有明确的 text part，尝试拼接所有可能包含文本的 parts
+      // 这对于包含 tool_calls 的混合响应很有用
+      const allText = data.parts
+        .map((p: any) => {
+           if (!p) return '';
+           return p.text || p.content || (typeof p === 'string' ? p : '');
+        })
+        .filter((t: any) => typeof t === 'string' && t.trim().length > 0)
+        .join('\n');
+      
+      if (allText) return allText;
     }
-    if (data?.text) return data.text;
-    if (res?.text) return res.text;
-    if (data?.info?.content) return data.info.content;
-    throw new Error('Failed to extract text from response');
+
+    // 2. 直接属性访问 (兼容各种变体)
+    if (typeof data?.text === 'string') return data.text;
+    if (typeof res?.text === 'string') return res.text;
+    if (typeof data?.content === 'string') return data.content;
+    if (typeof res?.content === 'string') return res.content;
+    if (typeof data?.message === 'string') return data.message;
+    
+    // 3. 嵌套结构 (data.info.content - 旧版或特定 agent)
+    if (typeof data?.info?.content === 'string') return data.info.content;
+
+    // 4. 尝试提取 content 字段（即使它可能深藏在其他结构中）
+    if (data && typeof data === 'object') {
+        // 如果 data 本身就是一个包含 content 的对象
+        if ('content' in data && typeof data.content === 'string') return data.content;
+    }
+
+    // 5. 最终兜底：如果 data 是对象但无法识别结构，尝试 stringify
+    // 防止因为解析失败导致整轮对话崩溃
+    try {
+        const str = JSON.stringify(data);
+        // 如果 stringify 结果不太长，就作为结果返回，方便调试
+        if (str.length < 5000) return str;
+    } catch {
+        // ignore
+    }
+
+    throw new Error(`Failed to extract text from response: ${util.inspect(res, { depth: 2 })}`);
   }
 
   private async getAgentSessionID(name: string, signal?: AbortSignal): Promise<string | undefined> {
