@@ -19,6 +19,9 @@ jobs:
 
       - run: npm ci
 
+      # Build the project so that tests can import from dist/
+      - run: npm run build
+
       # Ensure tests pass before publishing
       - run: npm test
 
