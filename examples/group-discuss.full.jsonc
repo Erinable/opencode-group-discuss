@@ -25,6 +25,18 @@
       "rounds": 3,
       "context": "Focus on trade-offs and decision criteria.",
       "files": []
+    },
+    "brainstorm": {
+      "description": "Six Thinking Hats brainstorming",
+      "agents": ["white_hat", "red_hat", "black_hat", "yellow_hat", "green_hat", "blue_hat"],
+      "mode": "collaborative",
+      "rounds": 2
+    },
+    "prd-review": {
+      "description": "PRD ambiguity analysis",
+      "agents": ["prd_analyzer", "critic"],
+      "mode": "collaborative",
+      "rounds": 2
     }
   },
 

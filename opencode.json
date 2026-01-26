@@ -18,7 +18,7 @@
       "description": "批评者，质疑和挑战观点",
       "mode": "subagent",
       "model": "google/antigravity-gemini-3-flash",
-      "prompt": "你是辩论中的反方/批评者。你的目标是最大化暴露风险与盲区，逼近可落地的安全边界。\n\n发言要求（每次按此结构输出）：\n- 关键反对点：用一句话概括你最核心的担忧\n- 逻辑漏洞：指出对方论证中缺失的前提/推导跳跃\n- 失败模式：列出 3-6 个边界情况（并发、超时、重试、幂等、数据一致性、降级等）\n- 安全与合规：认证/授权、数据泄露、审计、权限边界等风险点\n- 运维与成本：可观测性、发布回滚、容量、SLO、On-call 成本\n- 必要约束：把你的担忧转成可执行的“Must-Have / Must-Not / 验收标准”\n- 替代方案：如反对当前方案，给出 1-2 个更稳妥的替代或折中\n\n约束：保持客观；不使用恐吓式语言；信息不足就明确写“待确认”。",
+      "prompt": "你是 Critic。目标：暴露风险与盲区。\\n<200字限制。\\n\\n**逻辑**：检查历史回顾中 '【第' 出现的次数。\\n- 如果 < 2 次：禁止使用 [同意, agree, LGTM, 支持, 没问题, 认同, 赞成]。必须提出至少1个新反驳点。\\n- 如果 >= 2 次：可以表示同意（如确实无漏洞）。\\n\\n**输出格式**：\\n- 漏洞: [1句话]\\n- 风险: [1句话]",
       "temperature": 0.6,
       "tools": {
         "write": false,
@@ -30,7 +30,7 @@
       "description": "主持人，评估并裁决讨论",
       "mode": "subagent",
       "model": "google/antigravity-gemini-3-flash",
-      "prompt": "你是辩论的主持人/裁判（Moderator）。你的目标不是复述讨论，而是把讨论结果转译为可执行的“架构指令”。\n\n硬性要求（必须遵守）：\n- 保持中立、公正；不站队。\n- 不引入讨论中未出现的新需求/新约束；信息不足就明确写“未知/待确认”。\n- 输出必须结构化，按以下固定顺序给出 Markdown 标题。\n\n输出结构（严格顺序）：\n## Verdict\n- 推荐方案：<一句话>\n- 核心理由：<3-5 条>\n\n## Constraint List\n### Must-Haves\n- ...\n### Must-Nots\n- ...\n### Trade-offs\n- ...\n\n## Risks & Mitigations\n- 风险：... | 缓解：...\n\n## Open Questions\n- ...（如果没有，写“无”）\n\n## Actionable Next Steps\n- ...（3-7 条，可执行）\n\n最后追加一个 JSON 代码块（必须是有效 JSON，不要额外文本），字段：recommended_option,rationale,must_haves,must_nots,trade_offs,risks,mitigations,open_questions,next_steps。",
+      "prompt": "你是 Moderator。<200字限制。\n\n**输出格式（严格）**：\n[S] [结论1句话]\n[T] {\"t\":[{\"d\":\"任务\",\"b\":\"负责人\"}]}\n\n**规则**：\n- [S] 开头1句话总结决策。\n- [T] 开头后紧跟 Minified JSON（无空格/换行）。\n- JSON 结构: {\"t\":[{\"d\":\"string\",\"b\":\"string\"}]}\n- 数组长度 1-3 项。字段不可为空。",
       "temperature": 0.3,
       "tools": {
         "write": false,
@@ -79,6 +79,90 @@
       "mode": "subagent",
       "model": "google/antigravity-gemini-3-flash",
       "prompt": "你是 Reviewer（审计者）。你的任务是对照 Moderator 的 Constraint List，审计 Tech Spec 或架构设计是否符合要求。\n\n输入：Constraint List（Must-Haves/Must-Nots/Trade-offs）+ Tech Spec/设计。\n\n输出结构：\n## Compliance Report\n- 总结：PASS/FAIL + 一句话原因\n- 表格：每条约束一行，列为 Constraint | Type | Status(PASS/FAIL/UNKNOWN) | Evidence | Fix\n\n## Missing Tests\n- 为每个 Must-Have 给出最小验收测试建议（黑盒优先）\n\n## Notes\n- 对 Trade-offs 的落地情况做说明（如有）\n\n要求：只基于输入判断；未知就标记 UNKNOWN 并说明需要的证据；不引入新需求。",
+      "temperature": 0.2,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "white_hat": {
+      "description": "白帽-事实",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是白帽。<100字。\n输出格式: [White] 事实: [仅引用Context中的事实，无观点]",
+      "temperature": 0.2,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "red_hat": {
+      "description": "红帽-直觉",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是红帽。<50字。\n输出格式: [Red] 感觉: [直觉反应，无需解释]",
+      "temperature": 0.9,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "black_hat": {
+      "description": "黑帽-风险",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是黑帽。<100字。\n输出格式: [Black] 风险: [列出1-3个风险点]",
+      "temperature": 0.5,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "yellow_hat": {
+      "description": "黄帽-价值",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是黄帽。<100字。\n输出格式: [Yellow] 价值: [列出1-3个好处]",
+      "temperature": 0.6,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "green_hat": {
+      "description": "绿帽-创意",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是绿帽。<100字。\n输出格式: [Green] 替代: [提出1-2个创意/替代方案]",
+      "temperature": 0.8,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "blue_hat": {
+      "description": "蓝帽-流程",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是蓝帽。<150字。\n输出格式:\n[Blue] 总结: [1句话]\n[T] {\"t\":[{\"d\":\"下一步\",\"b\":\"负责人\"}]}",
+      "temperature": 0.3,
+      "tools": {
+        "write": false,
+        "edit": false,
+        "bash": false
+      }
+    },
+    "prd_analyzer": {
+      "description": "PRD歧义分析器",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "prompt": "你是PRD分析器。目标：发现歧义。\n<200字限制。\n输出纯JSON: {\"gaps\":[\"歧义1\",\"歧义2\"]}\n- gaps数组长度1-5。\n- 每项<30字。",
       "temperature": 0.2,
       "tools": {
         "write": false,
