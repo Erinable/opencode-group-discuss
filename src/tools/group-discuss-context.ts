@@ -2,7 +2,7 @@
  * group_discuss_context tool - show effective context budgeting
  */
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 import { getConfigLoader } from "../config/ConfigLoader.js";
 
 export function createGroupDiscussContextTool(projectRoot?: string): any {

@@ -2,7 +2,7 @@
  * session_manage tool - manage sub-sessions
  */
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 import { Logger } from "../utils/Logger.js";
 
 export function createSessionManageTool(client: any): any {

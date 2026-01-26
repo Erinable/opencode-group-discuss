@@ -2,7 +2,7 @@
  * group_discuss tool - start a multi-agent group discussion
  */
 
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 import { Discussion } from "../core/Discussion.js";
 import { DebateMode } from "../modes/DebateMode.js";
 import { CollaborativeMode } from "../modes/CollaborativeMode.js";
