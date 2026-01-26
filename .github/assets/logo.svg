@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="32" y1="16" x2="224" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0F14"/>
+      <stop offset="1" stop-color="#101A22"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="40" y1="24" x2="216" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2FE3C6"/>
+      <stop offset="1" stop-color="#FFB86B"/>
+    </linearGradient>
+    <filter id="shadow" x="-20" y="-20" width="296" height="296" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect x="20" y="20" width="216" height="216" rx="52" fill="url(#bg)" stroke="url(#stroke)" stroke-width="2" filter="url(#shadow)"/>
+
+  <!-- Bubble 1 (Advocate) -->
+  <path d="M78 88C78 77.402 86.402 69 97 69H154C164.598 69 173 77.402 173 88V120C173 130.598 164.598 139 154 139H121L98 158V139H97C86.402 139 78 130.598 78 120V88Z" fill="#0E151C" stroke="#2FE3C6" stroke-width="2"/>
+  <text x="106" y="111" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" font-size="24" fill="#2FE3C6" font-weight="700">A</text>
+
+  <!-- Bubble 2 (Critic) -->
+  <path d="M86 122C86 113.163 93.163 106 102 106H169C177.837 106 185 113.163 185 122V151C185 159.837 177.837 167 169 167H140L158 185V167H102C93.163 167 86 159.837 86 151V122Z" fill="#0E151C" stroke="#FFB86B" stroke-width="2"/>
+  <text x="121" y="143" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" font-size="24" fill="#FFB86B" font-weight="700">C</text>
+
+  <!-- Bubble 3 (Moderator) -->
+  <circle cx="78" cy="176" r="18" fill="#0E151C" stroke="#D6DEE8" stroke-width="2"/>
+  <text x="72" y="184" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" font-size="16" fill="#D6DEE8" font-weight="700">M</text>
+
+  <!-- Lines -->
+  <path d="M109 95H150" stroke="#233241" stroke-width="6" stroke-linecap="round"/>
+  <path d="M109 113H141" stroke="#233241" stroke-width="6" stroke-linecap="round"/>
+  <path d="M118 131H161" stroke="#233241" stroke-width="6" stroke-linecap="round"/>
+</svg>
