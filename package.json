@@ -32,7 +32,7 @@
     "collaboration",
     "discussion"
   ],
-  "author": "OpenCode Group Discuss Contributors",
+  "author": "Erinable",
   "license": "MIT",
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.0.0",
@@ -51,7 +51,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/opencode-ai/opencode-group-discuss"
+    "url": "https://github.com/Erinable/opencode-group-discuss"
   },
   "dependencies": {
     "async-retry": "^1.3.3",
