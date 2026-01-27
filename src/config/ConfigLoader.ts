@@ -20,6 +20,7 @@ import type {
   ContextBudgetProfile,
   LoggingConfigOverride,
   DebugConfigOverride,
+  TuiConfigOverride,
 } from './schema.js';
 import { DEFAULT_CONFIG, CONFIG_FILE_NAME } from './schema.js';
 
@@ -35,6 +36,7 @@ export interface ResolvedConfig {
   context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
+  tui: Required<TuiConfigOverride>;
 }
 
 /**
@@ -265,6 +267,11 @@ export class ConfigLoader {
           ...config.debug,
         };
       }
+
+      // Merge TUI config
+      if (config.tui) {
+        result.tui = { ...result.tui, ...config.tui };
+      }
     }
 
     return result;
@@ -342,6 +349,9 @@ export class ConfigLoader {
         log_prompts: config.debug?.log_prompts ?? DEFAULT_CONFIG.debug.log_prompts,
         log_context: config.debug?.log_context ?? DEFAULT_CONFIG.debug.log_context,
         log_compaction: config.debug?.log_compaction ?? DEFAULT_CONFIG.debug.log_compaction,
+      },
+      tui: {
+        enable_transcript: config.tui?.enable_transcript ?? DEFAULT_CONFIG.tui.enable_transcript,
       },
     };
   }
