@@ -194,6 +194,9 @@ export class DiscussionEngine implements IDiscussionEngine {
     });
 
     try {
+      // Create transcript session if enabled
+      await this.ensureTranscriptSession(engineSignal);
+
       for (let round = 1; round <= this.state.maxRounds; round++) {
         if (engineSignal.aborted) break;
         this.state.currentRound = round;
@@ -697,6 +700,45 @@ ${context}
       }
     }
     return this.sessionID;
+  }
+
+  private async ensureTranscriptSession(signal?: AbortSignal): Promise<string | undefined> {
+    if (this.state.subSessionIds['_transcript']) {
+      return this.state.subSessionIds['_transcript'];
+    }
+
+    const baseSignal = signal ?? this.abortController.signal;
+
+    try {
+      const config = await getConfigLoader(this.projectRoot).loadConfig();
+      if (config.tui?.enable_transcript === false) {
+        return undefined;
+      }
+
+      if (this.client?.session?.create && this.sessionID) {
+        const transcriptSessionID = await withRetry(async (innerSignal) => {
+          const combinedSignal = this.combineSignals([baseSignal, innerSignal].filter(Boolean) as AbortSignal[]);
+          const res = await this.client.session.create({
+            body: {
+              parentID: this.sessionID,
+              title: "📢 Group Discussion Transcript",
+            },
+            signal: combinedSignal,
+          });
+          const session = res?.data || res;
+          if (!session?.id) throw new Error('Transcript session creation returned no ID');
+          return session.id;
+        }, { retries: 3, signal: baseSignal });
+
+        await this.logger.info(`TUI Transcript Session Created`, { transcriptSessionID });
+        this.state.subSessionIds['_transcript'] = transcriptSessionID;
+        return transcriptSessionID;
+      }
+    } catch (e) {
+      await this.logger.warn(`Failed to create transcript session: ${e}`);
+    }
+
+    return undefined;
   }
 
    private async cleanup(): Promise<void> {
