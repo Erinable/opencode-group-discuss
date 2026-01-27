@@ -170,5 +170,8 @@
         "bash": false
       }
     }
-  }
+  },
+  "plugin": [
+    "opencode-group-discuss"
+  ]
 }

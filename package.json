@@ -12,7 +12,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "examples",
+    "scripts"
   ],
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -21,7 +23,9 @@
     "pack:smoke": "node scripts/pack-smoke.mjs",
     "test": "node --test tests/*.test.js tests/**/*.test.js",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "postinstall": "node scripts/postinstall.js",
+    "generate:schema": "ts-node scripts/generate-schema.ts"
   },
   "keywords": [
     "opencode",
@@ -44,6 +48,8 @@
     "@types/async-retry": "^1.4.9",
     "@types/node": "^20.0.0",
     "@types/uuid": "^10.0.0",
+    "ts-json-schema-generator": "^2.4.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.0"
   },
   "engines": {

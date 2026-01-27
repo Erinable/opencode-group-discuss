@@ -77,6 +77,66 @@ group_discuss({ "preset": "tech-review", "topic": "Next.js 还是 Remix？请基
      "plugin": ["opencode-group-discuss"]
    }
    ```
+3. **重要**：在你的 `opencode.json` 中配置必要的 Agent。
+
+   本插件依赖特定的 Agent（如 `advocate`, `critic`, `moderator`）。你必须在 `opencode.json` 中定义它们，插件才能召唤它们。
+
+   <details>
+   <summary>点击复制完整的 `agent` 配置</summary>
+
+   ```json
+   {
+     "agent": {
+       "advocate": {
+         "description": "Advocate - Proposes and defends solutions",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是辩论中的正方/倡导者。你的目标是推动某个方案/立场成为推荐方案。...",
+         "temperature": 0.7
+       },
+       "critic": {
+         "description": "Critic - Finds flaws and risks",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是 Critic。目标：暴露风险与盲区...",
+         "temperature": 0.6
+       },
+       "moderator": {
+         "description": "Moderator - Decides the winner",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是 Moderator...",
+         "temperature": 0.3
+       },
+       "summarizer": {
+         "description": "Summarizer - Compresses context",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "researcher": {
+         "description": "Researcher - Web research",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "bridge": {
+         "description": "Bridge - Spec writer",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "reviewer": {
+         "description": "Reviewer - Spec auditor",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       }
+     }
+   }
+   ```
+   *（参见 `dist/opencode.json` 或本仓库获取完整的 prompt 文本）*
+   </details>
 
 ### LLM Agent 用户
 

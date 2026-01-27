@@ -76,7 +76,66 @@ And watch them fight.
    {
      "plugin": ["opencode-group-discuss"]
    }
+3. **Critical**: Add the required agents to your `opencode.json`.
+
+   The plugin relies on specific sub-agents (like `advocate`, `critic`, `moderator`). You must define them in your `opencode.json` so the plugin can summon them.
+
+   <details>
+   <summary>Click to copy the full `agent` configuration</summary>
+
+   ```json
+   {
+     "agent": {
+       "advocate": {
+         "description": "Advocate - Proposes and defends solutions",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是辩论中的正方/倡导者。你的目标是推动某个方案/立场成为推荐方案。...",
+         "temperature": 0.7
+       },
+       "critic": {
+         "description": "Critic - Finds flaws and risks",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是 Critic。目标：暴露风险与盲区...",
+         "temperature": 0.6
+       },
+       "moderator": {
+         "description": "Moderator - Decides the winner",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "prompt": "你是 Moderator...",
+         "temperature": 0.3
+       },
+       "summarizer": {
+         "description": "Summarizer - Compresses context",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "researcher": {
+         "description": "Researcher - Web research",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "bridge": {
+         "description": "Bridge - Spec writer",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       },
+       "reviewer": {
+         "description": "Reviewer - Spec auditor",
+         "mode": "subagent",
+         "model": "google/antigravity-gemini-3-flash",
+         "temperature": 0.2
+       }
+     }
+   }
    ```
+   *(See `dist/opencode.json` or the repository for the full prompt text if you need to customize it)*
+   </details>
 
 ### For LLM Agents
 

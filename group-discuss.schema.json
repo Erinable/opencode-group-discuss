@@ -1,0 +1,374 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/GroupDiscussConfig",
+  "definitions": {
+    "GroupDiscussConfig": {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "JSON Schema URL (for editor validation)"
+        },
+        "defaults": {
+          "$ref": "#/definitions/DiscussionDefaults",
+          "description": "Default values for all discussions"
+        },
+        "presets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/DiscussionPreset"
+          },
+          "description": "Named presets for quick reuse"
+        },
+        "consensus": {
+          "$ref": "#/definitions/ConsensusConfigOverride",
+          "description": "Consensus evaluation configuration"
+        },
+        "termination": {
+          "$ref": "#/definitions/TerminationConfigOverride",
+          "description": "Termination condition configuration"
+        },
+        "context_compaction": {
+          "$ref": "#/definitions/ContextCompactionConfigOverride",
+          "description": "Context compaction configuration"
+        },
+        "context_budget": {
+          "$ref": "#/definitions/ContextBudgetConfigOverride",
+          "description": "Token-based context budget (recommended over raw char limits)"
+        },
+        "logging": {
+          "$ref": "#/definitions/LoggingConfigOverride",
+          "description": "Logging configuration"
+        },
+        "debug": {
+          "$ref": "#/definitions/DebugConfigOverride",
+          "description": "Debug instrumentation"
+        },
+        "tui": {
+          "$ref": "#/definitions/TuiConfigOverride",
+          "description": "TUI display configuration"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Main configuration interface for group-discuss.json"
+    },
+    "DiscussionDefaults": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "debate",
+            "collaborative"
+          ],
+          "description": "Default discussion mode"
+        },
+        "rounds": {
+          "type": "number",
+          "description": "Default number of rounds (1-10)"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Timeout in milliseconds"
+        },
+        "concurrency": {
+          "type": "number",
+          "description": "Concurrency level for parallel agent calls"
+        },
+        "verbose": {
+          "type": "boolean",
+          "description": "Show verbose output"
+        },
+        "keep_sessions": {
+          "type": "boolean",
+          "description": "Keep sub-sessions after discussion (for debugging)"
+        },
+        "max_retries": {
+          "type": "number",
+          "description": "Maximum retries for failed agent calls"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Default values for discussions"
+    },
+    "DiscussionPreset": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of registered agent names"
+        },
+        "participants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PresetParticipant"
+          },
+          "description": "Custom participants (overrides agents if provided)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "debate",
+            "collaborative"
+          ],
+          "description": "Discussion mode"
+        },
+        "rounds": {
+          "type": "number",
+          "description": "Number of rounds"
+        },
+        "context": {
+          "type": "string",
+          "description": "Additional context"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Reference files"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Preset configuration for quick reuse"
+    },
+    "PresetParticipant": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name in the discussion"
+        },
+        "subagent_type": {
+          "type": "string",
+          "description": "Registered subagent type (e.g., 'advocate', 'critic', 'general')"
+        },
+        "role": {
+          "type": "string",
+          "description": "Optional role description for prompt injection"
+        }
+      },
+      "required": [
+        "name",
+        "subagent_type"
+      ],
+      "additionalProperties": false,
+      "description": "Participant definition for presets"
+    },
+    "ConsensusConfigOverride": {
+      "type": "object",
+      "properties": {
+        "threshold": {
+          "type": "number",
+          "description": "Consensus threshold (0.5-1.0) to recommend conclusion"
+        },
+        "enable_convergence_analysis": {
+          "type": "boolean",
+          "description": "Enable convergence analysis between rounds"
+        },
+        "stalemate_window": {
+          "type": "number",
+          "description": "Number of rounds to detect stalemate"
+        },
+        "keyword_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Custom keyword weights for consensus detection"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Consensus evaluation configuration"
+    },
+    "TerminationConfigOverride": {
+      "type": "object",
+      "properties": {
+        "min_confidence": {
+          "type": "number",
+          "description": "Minimum confidence threshold (0.5-1.0)"
+        },
+        "enable_stalemate_detection": {
+          "type": "boolean",
+          "description": "Enable stalemate detection"
+        },
+        "stalemate_rounds": {
+          "type": "number",
+          "description": "Number of rounds to detect stalemate"
+        },
+        "disabled_conditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Disabled built-in termination conditions"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Termination condition configuration"
+    },
+    "ContextCompactionConfigOverride": {
+      "type": "object",
+      "properties": {
+        "max_context_chars": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ],
+          "description": "Maximum context character count"
+        },
+        "compaction_threshold": {
+          "type": "number",
+          "description": "Compaction trigger threshold (0-1)"
+        },
+        "max_message_length": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ],
+          "description": "Max characters per message"
+        },
+        "preserve_recent_rounds": {
+          "type": "number",
+          "description": "Preserve full messages in last N rounds"
+        },
+        "enable_key_info_extraction": {
+          "type": "boolean",
+          "description": "Enable key info extraction"
+        },
+        "keyword_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Keyword weights for importance scoring"
+        },
+        "include_self_history": {
+          "type": "boolean",
+          "description": "Include current agent's own history in injected context"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Context compaction configuration"
+    },
+    "ContextBudgetConfigOverride": {
+      "type": "object",
+      "properties": {
+        "profile": {
+          "$ref": "#/definitions/ContextBudgetProfile",
+          "description": "Preset budget profile"
+        },
+        "input_tokens": {
+          "type": "number",
+          "description": "Explicit input token budget for injected context (overrides profile)"
+        },
+        "min_output_tokens": {
+          "type": "number",
+          "description": "Reserved tokens for the model output"
+        },
+        "reasoning_headroom_tokens": {
+          "type": "number",
+          "description": "Reserved tokens for hidden reasoning (for reasoning models)"
+        },
+        "chars_per_token": {
+          "type": "number",
+          "description": "Heuristic conversion used when tokenizer is unavailable"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Token-based context budgeting.\n\nGoal: avoid forcing users to guess character limits. This budget applies to the injected discussion context (not the entire model prompt)."
+    },
+    "ContextBudgetProfile": {
+      "type": "string",
+      "enum": [
+        "small",
+        "balanced",
+        "large"
+      ]
+    },
+    "LoggingConfigOverride": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warn",
+            "info",
+            "debug"
+          ],
+          "description": "Minimum log level"
+        },
+        "console_enabled": {
+          "type": "boolean",
+          "description": "Enable console logging"
+        },
+        "file_enabled": {
+          "type": "boolean",
+          "description": "Enable file logging"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "File path for logs (relative paths are resolved from process.cwd())"
+        },
+        "include_meta": {
+          "type": "boolean",
+          "description": "Include meta payload in log output"
+        },
+        "max_entry_chars": {
+          "type": "number",
+          "description": "Max characters per log entry (message + meta)"
+        },
+        "max_meta_chars": {
+          "type": "number",
+          "description": "Max characters for meta JSON stringification"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Logging configuration"
+    },
+    "DebugConfigOverride": {
+      "type": "object",
+      "properties": {
+        "log_prompts": {
+          "type": "boolean",
+          "description": "Log full prompts (truncated by logger limits)"
+        },
+        "log_context": {
+          "type": "boolean",
+          "description": "Log built context injected to agents (truncated by logger limits)"
+        },
+        "log_compaction": {
+          "type": "boolean",
+          "description": "Log context compaction decision + stats"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Debug instrumentation switches"
+    },
+    "TuiConfigOverride": {
+      "type": "object",
+      "properties": {
+        "enable_transcript": {
+          "type": "boolean",
+          "description": "Enable real-time transcript session in TUI"
+        }
+      },
+      "additionalProperties": false,
+      "description": "TUI display configuration"
+    }
+  }
+}
