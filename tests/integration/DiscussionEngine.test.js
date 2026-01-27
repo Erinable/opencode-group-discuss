@@ -1,7 +1,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { DiscussionEngine } from '../../dist/core/engine/DiscussionEngine.js';
+import { ConfigLoader } from '../../dist/config/ConfigLoader.js';
 import { MockAgentClient } from './MockAgentClient.js';
 
 test('DiscussionEngine Integration: Happy Path', async (t) => {
@@ -129,4 +133,57 @@ test('DiscussionEngine Integration: keep_sessions=true', async (t) => {
   
   // Should have root + 1 agent session + 1 transcript session
   assert.strictEqual(client.sessions.size, 3);
+});
+
+test('DiscussionEngine Integration: Transcript session created and receives mirrored messages', async (t) => {
+  // 1. Create temp dir and mock config
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'transcript-test-'));
+  const configDir = path.join(tmpDir, '.opencode');
+  fs.mkdirSync(configDir, { recursive: true });
+  fs.writeFileSync(
+      path.join(configDir, 'group-discuss.json'),
+      JSON.stringify({ tui: { enable_transcript: true } })
+  );
+
+  // 2. Reset ConfigLoader to pick up new project root/config
+  ConfigLoader.reset();
+
+  const client = new MockAgentClient();
+  const engine = new DiscussionEngine(client, 'root-session', undefined, tmpDir);
+
+  try {
+      await engine.init({
+          topic: 'Transcript Test',
+          participants: [{ name: 'A', subagent_type: 'general' }],
+          maxRounds: 1,
+          mode: 'debate',
+          keepSessions: true
+      });
+
+      await engine.run();
+
+      // 3. Assert transcript session exists
+      const transcriptSession = Array.from(client.sessions.values()).find(
+          s => s.title === '📢 Group Discussion Transcript'
+      );
+
+      assert.ok(transcriptSession, 'Transcript session should be created');
+      assert.ok(transcriptSession.prompts.length > 0, 'Transcript should have content');
+      
+      // Verify mirroring (MockAgentClient stores prompts with parts[0].text)
+      const hasRoundInfo = transcriptSession.prompts.some(p => 
+          p.body?.parts?.[0]?.text?.includes('--- Round 1/1 ---')
+      );
+      assert.ok(hasRoundInfo, 'Transcript should contain round information');
+
+      const hasMessage = transcriptSession.prompts.some(p => 
+          p.body?.parts?.[0]?.text?.includes('@A')
+      );
+      assert.ok(hasMessage, 'Transcript should contain mirrored agent message');
+
+  } finally {
+      // 4. Cleanup
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      ConfigLoader.reset(); // Reset back to default
+  }
 });
