@@ -253,6 +253,8 @@ export class DiscussionEngine implements IDiscussionEngine {
 
       const conclusion = await this.safeGenerateConclusion();
 
+      await this.broadcastTranscriptText(`=== Conclusion ===\n${conclusion}\n(Consensus: ${((this.latestConsensusReport?.overallScore ?? 0) * 100).toFixed(0)}%)`, engineSignal);
+
       return buildResult(conclusion);
 
     } catch (error) {
@@ -304,6 +306,8 @@ export class DiscussionEngine implements IDiscussionEngine {
   private async runRound(signal: AbortSignal): Promise<void> {
     if (signal.aborted) return;
 
+    await this.broadcastTranscriptText(`--- Round ${this.state.currentRound}/${this.state.maxRounds} ---`, signal);
+
     const speakers = await this.modeInstance.getSpeakers(
       this.state.currentRound,
       this.state.maxRounds,
@@ -313,6 +317,7 @@ export class DiscussionEngine implements IDiscussionEngine {
     await this.logger.debug(`Round ${this.state.currentRound} speakers: ${speakers.join(', ')}`);
 
     const errors = this.state.errors ?? (this.state.errors = []);
+    const errStart = errors.length;
 
     // Dispatch tasks in parallel (controlled by ResourceController)
     const promises = speakers.map((name: string) => {
@@ -357,7 +362,13 @@ export class DiscussionEngine implements IDiscussionEngine {
       if (res) {
         this.state.messages.push(res);
         await this.logger.info(`[@${res.agent}]: ${res.content}`);
+        await this.broadcastTranscriptMessage(res, signal);
       }
+    }
+
+    const newErrors = errors.slice(errStart);
+    for (const err of newErrors) {
+      await this.broadcastTranscriptText(`ERROR | Round ${this.state.currentRound} | @${err.agent} | code=${err.code} | message=${err.message}`, signal);
     }
   }
 
@@ -700,6 +711,42 @@ ${context}
       }
     }
     return this.sessionID;
+  }
+
+  private async broadcastTranscriptText(text: string, signal?: AbortSignal): Promise<void> {
+    const transcriptId = this.state.subSessionIds['_transcript'];
+    if (!transcriptId) return;
+
+    const timeoutController = new AbortController();
+    const timeoutId = setTimeout(() => timeoutController.abort(new Error('Broadcast timeout')), 5000);
+    
+    const signals = [timeoutController.signal];
+    if (signal) signals.push(signal);
+    const combinedSignal = this.combineSignals(signals);
+
+    try {
+      if (this.client?.session?.prompt) {
+        await this.client.session.prompt({
+          body: {
+            noReply: true,
+            parts: [{ type: 'text', text }]
+          },
+          path: { id: transcriptId },
+          signal: combinedSignal
+        });
+      }
+    } catch (e) {
+      await this.logger.warn(`Failed to broadcast to transcript: ${e}`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private async broadcastTranscriptMessage(msg: DiscussionMessage, signal?: AbortSignal): Promise<void> {
+    const participant = this.state.participants.find(p => p.name === msg.agent);
+    const type = participant?.subagentType || 'unknown';
+    const text = `Round ${msg.round} | @${msg.agent} (${type})\n${msg.content}`;
+    await this.broadcastTranscriptText(text, signal);
   }
 
   private async ensureTranscriptSession(signal?: AbortSignal): Promise<string | undefined> {
