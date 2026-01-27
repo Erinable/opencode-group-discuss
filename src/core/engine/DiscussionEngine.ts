@@ -27,6 +27,7 @@ export class DiscussionEngine implements IDiscussionEngine {
   private logger: Logger;
   private client: any;
   private sessionID: string;
+  private projectRoot?: string;
   private dispatcher!: IDispatcher;
   private modeInstance!: any; // DiscussionMode interface
   private abortController!: AbortController;
@@ -42,10 +43,11 @@ export class DiscussionEngine implements IDiscussionEngine {
   private terminationReason?: string;
   private earlyTermination: boolean = false;
 
-  constructor(client: any, sessionID: string, logger?: Logger) {
+  constructor(client: any, sessionID: string, logger?: Logger, projectRoot?: string) {
     this.client = client;
     this.sessionID = sessionID;
     this.logger = logger || new Logger(client);
+    this.projectRoot = projectRoot;
     this.abortController = new AbortController();
   }
 
@@ -72,7 +74,7 @@ export class DiscussionEngine implements IDiscussionEngine {
     this.modeInstance = this.getModeInstance(options.mode);
     
     // 加载配置文件中的共识和终止配置
-    const configLoader = getConfigLoader();
+    const configLoader = getConfigLoader(this.projectRoot);
     const fileConfig = await configLoader.loadConfig();
 
     // P0: fail-closed sandboxing for files[] before any sub-sessions are created

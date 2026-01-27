@@ -14,9 +14,9 @@ export class Discussion {
   private engine: DiscussionEngine;
   private config: DiscussionConfig;
 
-  constructor(config: DiscussionConfig, client: any, sessionID: string, logger?: Logger) {
+  constructor(config: DiscussionConfig, client: any, sessionID: string, logger?: Logger, projectRoot?: string) {
     this.config = config;
-    this.engine = new DiscussionEngine(client, sessionID, logger);
+    this.engine = new DiscussionEngine(client, sessionID, logger, projectRoot);
   }
 
   async start(): Promise<DiscussionResult> {

@@ -419,7 +419,8 @@ ${JSON.stringify(envInfo, null, 2)}
           },
           client,
           rootSessionID,
-          logger
+          logger,
+          projectRoot
         );
 
         // 启动讨论
