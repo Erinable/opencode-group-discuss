@@ -127,6 +127,6 @@ test('DiscussionEngine Integration: keep_sessions=true', async (t) => {
 
   await engine.run();
   
-  // Should have root + 1 agent session
-  assert.strictEqual(client.sessions.size, 2);
+  // Should have root + 1 agent session + 1 transcript session
+  assert.strictEqual(client.sessions.size, 3);
 });

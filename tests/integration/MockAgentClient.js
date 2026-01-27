@@ -26,7 +26,8 @@ export class MockAgentClient {
   }
 
   async createSession(args) {
-    const { parentID, title, signal } = args;
+    const { parentID, title } = args.body || args;
+    const { signal } = args;
     if (signal?.aborted) throw new Error('Aborted before create');
 
     // Simulate delay
@@ -53,6 +54,16 @@ export class MockAgentClient {
 
   async prompt(args) {
     const { body, path: { id }, signal } = args;
+
+    const session = this.sessions.get(id);
+    if (session) {
+      session.prompts = session.prompts || [];
+      session.prompts.push({ body: args.body, timestamp: Date.now() });
+    }
+
+    if (args.body?.noReply) {
+      return { data: { parts: [{ type: 'text', text: 'UserMessage injected' }], role: 'user' } };
+    }
 
     if (signal?.aborted) {
       const err = new Error('Aborted');
