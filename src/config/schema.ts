@@ -188,6 +188,14 @@ export interface DebugConfigOverride {
 }
 
 /**
+ * TUI display configuration
+ */
+export interface TuiConfigOverride {
+  /** Enable real-time transcript session in TUI */
+  enable_transcript?: boolean;
+}
+
+/**
  * Main configuration interface for group-discuss.json
  */
 export interface GroupDiscussConfig {
@@ -217,6 +225,9 @@ export interface GroupDiscussConfig {
 
   /** Debug instrumentation */
   debug?: DebugConfigOverride;
+
+  /** TUI display configuration */
+  tui?: TuiConfigOverride;
 }
 
 /**
@@ -231,6 +242,7 @@ export const DEFAULT_CONFIG: {
   context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
+  tui: Required<TuiConfigOverride>;
 } = {
   defaults: {
     mode: 'debate',
@@ -286,6 +298,10 @@ export const DEFAULT_CONFIG: {
     log_prompts: false,
     log_context: false,
     log_compaction: false,
+  },
+
+  tui: {
+    enable_transcript: true,
   },
 };
 
