@@ -8,6 +8,7 @@
 
 import type { ConsensusConfig } from '../core/consensus/types.js';
 import type { TerminationConfig } from '../core/termination/types.js';
+import type { PredefinedTheme, ThemeOverride } from './theme.js';
 
 /**
  * Participant definition for presets
@@ -188,6 +189,17 @@ export interface DebugConfigOverride {
 }
 
 /**
+ * Theme configuration
+ */
+export interface ThemeConfigOverride {
+  /** Predefined theme name */
+  theme?: PredefinedTheme;
+
+  /** Custom theme overrides (applied on top of selected theme) */
+  custom_theme?: ThemeOverride;
+}
+
+/**
  * TUI display configuration
  */
 export interface TuiConfigOverride {
@@ -202,6 +214,9 @@ export interface TuiConfigOverride {
 
   /** Orientation of the transcript pane */
   tmux_pane_orientation?: 'horizontal' | 'vertical';
+
+  /** Theme configuration */
+  theme?: ThemeConfigOverride;
 }
 
 /**
@@ -251,7 +266,7 @@ export const DEFAULT_CONFIG: {
   context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
-  tui: Required<TuiConfigOverride>;
+  tui: Required<Omit<TuiConfigOverride, 'theme'>> & { theme: { theme: PredefinedTheme; custom_theme?: ThemeOverride } };
 } = {
   defaults: {
     mode: 'debate',
@@ -313,6 +328,10 @@ export const DEFAULT_CONFIG: {
     enable_transcript: true,
     use_tmux: true,
     tmux_pane_orientation: 'horizontal',
+    theme: {
+      theme: 'default',
+      custom_theme: undefined,
+    },
   },
 };
 
