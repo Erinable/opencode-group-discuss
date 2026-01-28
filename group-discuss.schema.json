@@ -364,7 +364,19 @@
       "properties": {
         "enable_transcript": {
           "type": "boolean",
-          "description": "Enable real-time transcript session in TUI"
+          "deprecated": "The sub-session transcript feature is deprecated. Use `use_tmux` instead."
+        },
+        "use_tmux": {
+          "type": "boolean",
+          "description": "Enable Tmux integration for live transcript pane"
+        },
+        "tmux_pane_orientation": {
+          "type": "string",
+          "enum": [
+            "horizontal",
+            "vertical"
+          ],
+          "description": "Orientation of the transcript pane"
         }
       },
       "additionalProperties": false,

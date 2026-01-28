@@ -213,6 +213,104 @@ See `docs/CONFIG.md` for the nitty-gritty.
 
 ---
 
+## 📺 Live Panel & History (Tmux TUI)
+
+This plugin integrates deeply with **Tmux** to provide a real-time, side-by-side transcript panel.
+
+### 1. Prerequisites (For Humans)
+
+1. **Install Tmux**:
+   - macOS: `brew install tmux`
+   - Linux: `sudo apt install tmux`
+
+2. **Setup `oc` Helper (Strongly Recommended)**:
+   Add this function to your `~/.zshrc` or `~/.bashrc`. It automatically handles session management and panel layout.
+
+   ```bash
+   # Add to ~/.zshrc
+   oc() {
+       local base_name=$(basename "$PWD")
+       local path_hash=$(echo "$PWD" | md5 | cut -c1-4)
+       local session_name="${base_name}-${path_hash}"
+
+       # Find available port
+       local port=4096
+       while [ $port -lt 5096 ]; do
+           if ! lsof -i :$port >/dev/null 2>&1; then
+               break
+           fi
+           port=$((port + 1))
+       done
+
+       export OPENCODE_PORT=$port
+
+       if [ -n "$TMUX" ]; then
+           opencode --port $port "$@"
+       else
+           local oc_cmd="OPENCODE_PORT=$port opencode --port $port ${(q)@}; exec $SHELL"
+
+           if tmux has-session -t "$session_name" 2>/dev/null; then
+               if [ -t 1 ]; then
+                   tmux new-window -t "$session_name" -c "$PWD" "$oc_cmd"
+                   tmux attach-session -t "$session_name"
+               else
+                   tmux new-window -d -t "$session_name" -c "$PWD" "$oc_cmd"
+                   echo "Attached new window to existing session"
+               fi
+           else
+               if [ -t 1 ]; then
+                   tmux new-session -s "$session_name" -c "$PWD" "$oc_cmd"
+               else
+                   tmux new-session -d -s "$session_name" -c "$PWD" "$oc_cmd"
+                   echo "Started new session '${session_name}'"
+               fi
+           fi
+       fi
+   }
+   ```
+
+### 2. Usage
+
+**Start a Discussion**:
+Run commands with `oc` instead of `opencode`:
+
+```bash
+oc run debate "Tabs vs Spaces"
+```
+
+**What happens?**
+1. A new side-by-side pane opens automatically.
+2. The transcript streams in real-time (with nice dark-mode formatting).
+3. **Persistence**: When the discussion ends, the panel **stays open** so you can review the conclusion.
+
+### 3. Controls
+
+#### In the Panel
+*   `Space`: Pause/Resume auto-scroll.
+*   `h`: **History Menu**. Browse logs from previous discussions.
+*   `Esc`: Return from History to Live view.
+*   `q`: Close the panel manually.
+*   **Mouse**: Scroll wheel works!
+
+#### Via AI (Panel Control Tool)
+You can ask the AI to manage the panel for you:
+
+*   *"Open the transcript panel"* -> Opens/Resets the panel to the latest log.
+*   *"Close panel"* -> Closes it.
+
+### 4. Configuration
+
+In `group-discuss.json`:
+
+```json
+"tui": {
+  "use_tmux": true,                  // Enable TUI
+  "tmux_pane_orientation": "horizontal" // or "vertical"
+}
+```
+
+---
+
 ## Troubleshooting
 
 **"Unauthorized" / 401?**

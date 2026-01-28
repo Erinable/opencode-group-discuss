@@ -214,6 +214,105 @@ group_discuss({
 
 ---
 
+## 📺 实时面板与历史记录 (Tmux TUI)
+
+本插件与 **Tmux** 深度集成，提供实时的、分屏的讨论实录面板。
+
+### 1. 前置要求 (Prerequisites)
+
+1. **安装 Tmux**:
+   - macOS: `brew install tmux`
+   - Linux: `sudo apt install tmux`
+
+2. **设置 `oc` 助手函数 (强烈推荐)**:
+   将此函数添加到您的 `~/.zshrc` 或 `~/.bashrc` 中。它会自动处理会话管理和面板布局。
+
+   ```bash
+   # 添加到 ~/.zshrc
+   oc() {
+       local base_name=$(basename "$PWD")
+       local path_hash=$(echo "$PWD" | md5 | cut -c1-4)
+       local session_name="${base_name}-${path_hash}"
+
+       # 寻找可用端口
+       local port=4096
+       while [ $port -lt 5096 ]; do
+           if ! lsof -i :$port >/dev/null 2>&1; then
+               break
+           fi
+           port=$((port + 1))
+       done
+
+       export OPENCODE_PORT=$port
+
+       if [ -n "$TMUX" ]; then
+           opencode --port $port "$@"
+       else
+           local oc_cmd="OPENCODE_PORT=$port opencode --port $port ${(q)@}; exec $SHELL"
+
+           # 确保会话存在
+           if tmux has-session -t "$session_name" 2>/dev/null; then
+               if [ -t 1 ]; then
+                   tmux new-window -t "$session_name" -c "$PWD" "$oc_cmd"
+                   tmux attach-session -t "$session_name"
+               else
+                   tmux new-window -d -t "$session_name" -c "$PWD" "$oc_cmd"
+                   echo "Attached new window to existing session"
+               fi
+           else
+               if [ -t 1 ]; then
+                   tmux new-session -s "$session_name" -c "$PWD" "$oc_cmd"
+               else
+                   tmux new-session -d -s "$session_name" -c "$PWD" "$oc_cmd"
+                   echo "Started new session '${session_name}'"
+               fi
+           fi
+       fi
+   }
+   ```
+
+### 2. 使用方法 (Usage)
+
+**发起讨论**:
+使用 `oc` 命令代替 `opencode`：
+
+```bash
+oc run debate "Tabs vs Spaces"
+```
+
+**发生了什么？**
+1. 一个新的侧边面板会自动打开。
+2. 讨论实录会（以精美的暗色模式）实时流式显示。
+3. **持久化**：当讨论结束时，面板**保持打开**，方便您复盘结论。
+
+### 3. 控制 (Controls)
+
+#### 在面板中
+*   `Space` (空格): 暂停/继续自动滚动。
+*   `h`: **历史菜单**。浏览之前的讨论日志。
+*   `Esc`: 从历史记录返回实时视图。
+*   `q`: 手动关闭面板。
+*   **鼠标**: 支持滚轮滚动！
+
+#### 通过 AI (Panel Control Tool)
+你可以让 AI 帮你管理面板：
+
+*   *“打开面板”* -> 打开/重置面板并加载最新日志。
+*   *“关闭面板”* -> 关闭它。
+
+### 4. 配置 (Configuration)
+
+在 `group-discuss.json` 中配置：
+
+```json
+"tui": {
+  "use_tmux": true,                  // 启用 TUI
+  "tmux_pane_orientation": "horizontal" // 或 "vertical"
+}
+```
+
+---
+
 ## 故障排除 (Troubleshooting)
 
 **"Unauthorized" / 401?**

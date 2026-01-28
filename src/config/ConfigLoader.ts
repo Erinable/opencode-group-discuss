@@ -1,6 +1,6 @@
 /**
  * ConfigLoader - Configuration file loader and merger
- * 
+ *
  * Loads configuration from project-level and global-level files,
  * merges them with proper precedence.
  */
@@ -163,10 +163,10 @@ export class ConfigLoader {
       }
 
       const content = fs.readFileSync(filePath, 'utf-8');
-      
+
       // Strip comments (JSONC support) - simple implementation
       const jsonContent = this.stripJsonComments(content);
-      
+
       const config = JSON.parse(jsonContent) as GroupDiscussConfig;
       return config;
     } catch (error) {
@@ -352,6 +352,8 @@ export class ConfigLoader {
       },
       tui: {
         enable_transcript: config.tui?.enable_transcript ?? DEFAULT_CONFIG.tui.enable_transcript,
+        use_tmux: config.tui?.use_tmux ?? DEFAULT_CONFIG.tui.use_tmux,
+        tmux_pane_orientation: config.tui?.tmux_pane_orientation ?? DEFAULT_CONFIG.tui.tmux_pane_orientation,
       },
     };
   }

@@ -1,7 +1,7 @@
-import { 
-  IDiscussionEngine, 
-  IDiscussionState, 
-  EngineOptions, 
+import {
+  IDiscussionEngine,
+  IDiscussionState,
+  EngineOptions,
   EngineState,
   IDispatcher
 } from './interfaces.js';
@@ -18,8 +18,10 @@ import { getConfigLoader } from '../../config/ConfigLoader.js';
 import { ContextCompactor } from '../context/ContextCompactor.js';
 import type { ConsensusReport } from '../consensus/types.js';
 import type { TerminationContext } from '../termination/types.js';
+import { TmuxManager } from '../tui/TmuxManager.js';
 import * as path from 'path';
 import * as util from 'util';
+import * as fs from 'fs/promises';
 
 export class DiscussionEngine implements IDiscussionEngine {
   private options!: EngineOptions;
@@ -32,9 +34,10 @@ export class DiscussionEngine implements IDiscussionEngine {
   private modeInstance!: any; // DiscussionMode interface
   private abortController!: AbortController;
   private cleanupPromise?: Promise<void>;
+  private transcriptLogPath?: string;
 
   private initialFilesBlock?: string;
-  
+
   // P0: 新增共识评估器和终止管理器
   private consensusEvaluator!: ConsensusEvaluator;
   private terminationManager!: TerminationManager;
@@ -54,7 +57,7 @@ export class DiscussionEngine implements IDiscussionEngine {
   async init(options: EngineOptions): Promise<void> {
     this.options = options;
     this.dispatcher = new ResourceController(options.concurrency || 2);
-    
+
     // Initialize State
     this.state = {
       id: this.sessionID,
@@ -72,7 +75,7 @@ export class DiscussionEngine implements IDiscussionEngine {
 
     // Initialize Mode
     this.modeInstance = this.getModeInstance(options.mode);
-    
+
     // 加载配置文件中的共识和终止配置
     const configLoader = getConfigLoader(this.projectRoot);
     const fileConfig = await configLoader.loadConfig();
@@ -116,7 +119,7 @@ export class DiscussionEngine implements IDiscussionEngine {
 
       this.initialFilesBlock = block;
     }
-    
+
     // P0: 初始化共识评估器（合并配置文件 + mode 提供的配置）
     const modeConsensusConfig = this.modeInstance.getConsensusConfig?.() ?? {};
     const mergedConsensusConfig = {
@@ -127,7 +130,7 @@ export class DiscussionEngine implements IDiscussionEngine {
       ...modeConsensusConfig, // mode 配置可以覆盖文件配置
     };
     this.consensusEvaluator = new ConsensusEvaluator(mergedConsensusConfig);
-    
+
     // P0: 初始化终止管理器（合并配置文件 + mode 提供的自定义条件）
     const customTerminationConditions = this.modeInstance.getTerminationConditions?.() ?? [];
     const terminationConfig = {
@@ -136,7 +139,7 @@ export class DiscussionEngine implements IDiscussionEngine {
       stalemateRounds: fileConfig.termination.stalemate_rounds,
     };
     this.terminationManager = new TerminationManager(customTerminationConditions, terminationConfig);
-    
+
     // 移除被禁用的终止条件
     for (const conditionName of fileConfig.termination.disabled_conditions) {
       this.terminationManager.removeCondition(conditionName);
@@ -153,9 +156,9 @@ export class DiscussionEngine implements IDiscussionEngine {
       keywordWeights: contextConfig.keyword_weights,
       includeSelfHistory: contextConfig.include_self_history,
     });
-    
-    await this.logger.debug('DiscussionEngine initialized', { 
-      mode: options.mode, 
+
+    await this.logger.debug('DiscussionEngine initialized', {
+      mode: options.mode,
       participants: options.participants.map(p => p.name),
       terminationConditions: this.terminationManager.getConditionNames(),
       consensusThreshold: mergedConsensusConfig.consensusThreshold,
@@ -194,8 +197,28 @@ export class DiscussionEngine implements IDiscussionEngine {
     });
 
     try {
-      // Create transcript session if enabled
-      await this.ensureTranscriptSession(engineSignal);
+      // Initialize Tmux transcript if enabled
+      const configLoader = getConfigLoader(this.projectRoot);
+      const config = await configLoader.loadConfig();
+
+      if (config.tui.use_tmux && TmuxManager.isActive()) {
+        const logDir = path.join(configLoader.getProjectRoot(), '.opencode', 'logs');
+        await fs.mkdir(logDir, { recursive: true });
+        this.transcriptLogPath = path.join(logDir, `transcript-${Date.now()}.log`);
+        // Create empty file
+        await fs.writeFile(this.transcriptLogPath, '');
+
+        await TmuxManager.initTranscriptPane(this.transcriptLogPath, configLoader.getProjectRoot());
+
+        // Broadcast metadata
+        await this.logToTranscript({
+            type: 'meta',
+            payload: {
+                topic: this.state.topic,
+                participants: this.state.participants
+            }
+        });
+      }
 
       for (let round = 1; round <= this.state.maxRounds; round++) {
         if (engineSignal.aborted) break;
@@ -205,7 +228,7 @@ export class DiscussionEngine implements IDiscussionEngine {
         this.state.updatedAt = Date.now();
 
         if (engineSignal.aborted) break;
-        
+
         // P0: 每轮结束后进行共识评估
         this.latestConsensusReport = await this.consensusEvaluator.evaluate(this.state.messages);
         await this.logger.debug(`Round ${round} consensus: ${(this.latestConsensusReport.overallScore * 100).toFixed(1)}%`, {
@@ -253,7 +276,13 @@ export class DiscussionEngine implements IDiscussionEngine {
 
       const conclusion = await this.safeGenerateConclusion();
 
-      await this.broadcastTranscriptText(`=== Conclusion ===\n${conclusion}\n(Consensus: ${((this.latestConsensusReport?.overallScore ?? 0) * 100).toFixed(0)}%)`, engineSignal);
+      await this.logToTranscript({
+          type: 'conclusion',
+          payload: { content: conclusion }
+      });
+
+      // Persist the transcript pane so user can review it
+      TmuxManager.persistPane();
 
       return buildResult(conclusion);
 
@@ -306,7 +335,10 @@ export class DiscussionEngine implements IDiscussionEngine {
   private async runRound(signal: AbortSignal): Promise<void> {
     if (signal.aborted) return;
 
-    await this.broadcastTranscriptText(`--- Round ${this.state.currentRound}/${this.state.maxRounds} ---`, signal);
+    await this.logToTranscript({
+        type: 'round_start',
+        payload: { round: this.state.currentRound }
+    });
 
     const speakers = await this.modeInstance.getSpeakers(
       this.state.currentRound,
@@ -331,15 +363,15 @@ export class DiscussionEngine implements IDiscussionEngine {
           errors.push({ agent: name, round: this.state.currentRound, message: 'Speaker not found in participants' });
           return null;
         }
-        
+
         try {
            return await this.executeAgent(name, effectiveSignal);
         } catch (e) {
            if (this.isAbortLike(e)) return null;
            const errorObj = e instanceof Error ? e : new Error(String(e));
-           errors.push({ 
-             agent: name, 
-             round: this.state.currentRound, 
+           errors.push({
+             agent: name,
+             round: this.state.currentRound,
              message: errorObj.message,
              code: (errorObj as any).code,
              retryCount: (errorObj as any).retryCount,
@@ -357,23 +389,41 @@ export class DiscussionEngine implements IDiscussionEngine {
       if (this.isAbortLike(err)) return;
       throw err;
     }
-    
+
     for (const res of outcomes) {
       if (res) {
         this.state.messages.push(res);
         await this.logger.info(`[@${res.agent}]: ${res.content}`);
-        await this.broadcastTranscriptMessage(res, signal);
+
+        const participant = this.state.participants.find(p => p.name === res.agent);
+        await this.logToTranscript({
+            type: 'message',
+            payload: {
+                agent: res.agent,
+                subagentType: participant?.subagentType,
+                role: participant?.role,
+                content: res.content,
+                round: res.round
+            }
+        });
       }
     }
 
     const newErrors = errors.slice(errStart);
     for (const err of newErrors) {
-      await this.broadcastTranscriptText(`ERROR | Round ${this.state.currentRound} | @${err.agent} | code=${err.code} | message=${err.message}`, signal);
+      await this.logToTranscript({
+          type: 'error',
+          payload: {
+              agent: err.agent,
+              message: err.message,
+              code: err.code
+          }
+      });
     }
   }
 
   private async executeAgent(name: string, signal?: AbortSignal): Promise<DiscussionMessage> {
-    const participant = this.state.participants.find(p => p.name === name) || 
+    const participant = this.state.participants.find(p => p.name === name) ||
                         ({ name, subagentType: 'general' } as DiscussionParticipant);
 
     // 为该 Agent 构建增量上下文（只包含上一轮其他人的发言）
@@ -392,7 +442,7 @@ export class DiscussionEngine implements IDiscussionEngine {
     }
 
     const engineSignal = signal ?? this.abortController.signal;
-    
+
     const agentSessionID = await this.getAgentSessionID(name, engineSignal);
     if (!agentSessionID) {
       throw new Error(`Unable to get session for agent ${name}`);
@@ -541,10 +591,10 @@ ${context}
       const runCall = async () => {
         if (this.client?.session?.prompt) {
             await this.logger.debug(`[InvokeStart] Calling session.prompt for agent ${agentType} in session ${sessionId}`);
-            
+
             // 短暂延迟确保会话完全初始化
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             try {
                 const res = await this.client.session.prompt({
                     body: {
@@ -554,15 +604,15 @@ ${context}
                     path: { id: sessionId },
                     signal: combinedSignal
                 });
-                
+
                 // Debug: log raw response to help troubleshoot empty messages
                 if (this.logger.isEnabled('debug')) {
-                    await this.logger.debug(`[RawResponse] Agent ${agentType} returned:`, { 
-                        resType: typeof res, 
-                        preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+                    await this.logger.debug(`[RawResponse] Agent ${agentType} returned:`, {
+                        resType: typeof res,
+                        preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000)
                     });
                 }
-                
+
                 return this.extractTextFromResponse(res);
             } catch (promptError: any) {
                 // 尝试获取更多错误信息
@@ -572,7 +622,7 @@ ${context}
                     name: promptError?.name,
                     stack: promptError?.stack?.slice(0, 500),
                 };
-                
+
                 // 如果有 response 或 request 信息也记录
                 if (promptError?.response) {
                     errorInfo.responseStatus = promptError.response.status;
@@ -581,14 +631,14 @@ ${context}
                 if (promptError?.request) {
                     errorInfo.requestUrl = promptError.request.url;
                 }
-                
+
                 // 检查是否有嵌套的错误信息
                 if (promptError?.error) {
-                    errorInfo.nestedError = typeof promptError.error === 'object' 
+                    errorInfo.nestedError = typeof promptError.error === 'object'
                         ? JSON.stringify(promptError.error).slice(0, 500)
                         : String(promptError.error);
                 }
-                
+
                 await this.logger.error(`[PromptError] Agent ${agentType} prompt failed:`, errorInfo);
                 throw promptError;
             }
@@ -605,9 +655,9 @@ ${context}
             });
 
             if (this.logger.isEnabled('debug')) {
-                await this.logger.debug(`[RawResponse] Client.prompt Agent ${agentType} returned:`, { 
-                    resType: typeof res, 
-                    preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000) 
+                await this.logger.debug(`[RawResponse] Client.prompt Agent ${agentType} returned:`, {
+                    resType: typeof res,
+                    preview: util.inspect(res, { depth: 3, colors: false }).slice(0, 2000)
                 });
             }
 
@@ -630,13 +680,13 @@ ${context}
     if (typeof res === "string") return res;
 
     const data = res?.data || res;
-    
+
     // 1. 标准 OpenCode SDK 响应结构 (data.parts)
     if (data?.parts && Array.isArray(data.parts)) {
       // 优先查找 text 类型的 part
       const textPart = data.parts.find((p: any) => p.type === "text");
       if (textPart?.text) return textPart.text;
-      
+
       // 如果没有明确的 text part，尝试拼接所有可能包含文本的 parts
       // 这对于包含 tool_calls 的混合响应很有用
       const allText = data.parts
@@ -646,7 +696,7 @@ ${context}
         })
         .filter((t: any) => typeof t === 'string' && t.trim().length > 0)
         .join('\n');
-      
+
       if (allText) return allText;
     }
 
@@ -656,7 +706,7 @@ ${context}
     if (typeof data?.content === 'string') return data.content;
     if (typeof res?.content === 'string') return res.content;
     if (typeof data?.message === 'string') return data.message;
-    
+
     // 3. 嵌套结构 (data.info.content - 旧版或特定 agent)
     if (typeof data?.info?.content === 'string') return data.info.content;
 
@@ -713,103 +763,40 @@ ${context}
     return this.sessionID;
   }
 
-  private async broadcastTranscriptText(text: string, signal?: AbortSignal): Promise<void> {
-    const transcriptId = this.state.subSessionIds['_transcript'];
-    if (!transcriptId) return;
-
-    const timeoutController = new AbortController();
-    const timeoutId = setTimeout(() => timeoutController.abort(new Error('Broadcast timeout')), 5000);
-    
-    const signals = [timeoutController.signal];
-    if (signal) signals.push(signal);
-    const combinedSignal = this.combineSignals(signals);
-
-    try {
-      if (this.client?.session?.prompt) {
-        await this.client.session.prompt({
-          body: {
-            noReply: true,
-            parts: [{ type: 'text', text }]
-          },
-          path: { id: transcriptId },
-          signal: combinedSignal
-        });
+  private async logToTranscript(msg: any): Promise<void> {
+      if (this.transcriptLogPath) {
+          try {
+              await fs.appendFile(this.transcriptLogPath, JSON.stringify(msg) + '\n');
+          } catch (e) {
+              await this.logger.warn('Failed to write to transcript log', e as any);
+          }
       }
-    } catch (e) {
-      await this.logger.warn(`Failed to broadcast to transcript: ${e}`);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  private async broadcastTranscriptMessage(msg: DiscussionMessage, signal?: AbortSignal): Promise<void> {
-    const participant = this.state.participants.find(p => p.name === msg.agent);
-    const type = participant?.subagentType || 'unknown';
-    const text = `Round ${msg.round} | @${msg.agent} (${type})\n${msg.content}`;
-    await this.broadcastTranscriptText(text, signal);
-  }
-
-  private async ensureTranscriptSession(signal?: AbortSignal): Promise<string | undefined> {
-    if (this.state.subSessionIds['_transcript']) {
-      return this.state.subSessionIds['_transcript'];
-    }
-
-    const baseSignal = signal ?? this.abortController.signal;
-
-    try {
-      const config = await getConfigLoader(this.projectRoot).loadConfig();
-      if (config.tui?.enable_transcript === false) {
-        return undefined;
-      }
-
-      if (this.client?.session?.create && this.sessionID) {
-        const transcriptSessionID = await withRetry(async (innerSignal) => {
-          const combinedSignal = this.combineSignals([baseSignal, innerSignal].filter(Boolean) as AbortSignal[]);
-          const res = await this.client.session.create({
-            body: {
-              parentID: this.sessionID,
-              title: "📢 Group Discussion Transcript",
-            },
-            signal: combinedSignal,
-          });
-          const session = res?.data || res;
-          if (!session?.id) throw new Error('Transcript session creation returned no ID');
-          return session.id;
-        }, { retries: 3, signal: baseSignal });
-
-        await this.logger.info(`TUI Transcript Session Created`, { transcriptSessionID });
-        this.state.subSessionIds['_transcript'] = transcriptSessionID;
-        return transcriptSessionID;
-      }
-    } catch (e) {
-      await this.logger.warn(`Failed to create transcript session: ${e}`);
-    }
-
-    return undefined;
   }
 
    private async cleanup(): Promise<void> {
      if (this.cleanupPromise) return this.cleanupPromise;
- 
-     const cleanupLogic = async () => {
-       try {
-         await this.dispatcher.shutdown({ awaitIdle: true, timeoutMs: 30000 });
-       } catch (e) {
-         await this.logger.warn('Dispatcher shutdown failed', e as any);
-       }
- 
+
+        const cleanupLogic = async () => {
+      try {
+        await this.dispatcher.shutdown({ awaitIdle: true, timeoutMs: 30000 });
+      } catch (e) {
+        await this.logger.warn('Dispatcher shutdown failed', e as any);
+      }
+
+
+
        if (this.options.keepSessions) {
          await this.logger.info("keep_sessions=true, skipping cleanup.");
          return;
        }
- 
+
        const ids = Object.values(this.state.subSessionIds);
        if (ids.length === 0) return;
- 
+
        await this.logger.info(`Cleaning up ${ids.length} sub-sessions...`);
- 
+
        if (!this.client?.session?.delete) return;
- 
+
        // Parallel cleanup
        await Promise.all(ids.map(async (id) => {
            try {
@@ -818,6 +805,10 @@ ${context}
                await this.logger.warn(`Failed to delete session ${id}`, { error: e });
            }
        }));
+
+
+       const root = getConfigLoader(this.projectRoot).getProjectRoot();
+       await TmuxManager.cleanupPane(root);
      };
 
      this.cleanupPromise = (async () => {
@@ -833,10 +824,10 @@ ${context}
             if (timeoutId) clearTimeout(timeoutId);
         }
      })();
- 
+
      await this.cleanupPromise;
    }
- 
+
    private async safeGenerateConclusion(): Promise<string> {
      try {
        return await this.modeInstance.generateConclusion(this.state.messages, this.state.topic);
@@ -845,7 +836,7 @@ ${context}
        return '';
      }
    }
- 
+
    private mapStatus(state: EngineState): DiscussionStatus {
      switch (state) {
        case EngineState.COMPLETED:
@@ -858,7 +849,7 @@ ${context}
          return 'failed';
      }
    }
- 
+
    private combineSignals(signals: AbortSignal[]): AbortSignal {
      const active = signals.filter(Boolean);
      if (active.length === 0) return this.abortController.signal;
@@ -866,7 +857,7 @@ ${context}
      // Rely on Node >= 20 AbortSignal.any
      return (AbortSignal as any).any(active) as AbortSignal;
    }
- 
+
    private isAbortLike(error: any): boolean {
      if (!error) return false;
      const code = (error as any).code;
@@ -877,7 +868,7 @@ ${context}
        || code === 'ETIMEDOUT'
        || message.includes('Dispatcher is shutting down');
    }
- 
+
    private getModeInstance(modeName: string) {
      switch (modeName) {
        case "debate": return new DebateMode();

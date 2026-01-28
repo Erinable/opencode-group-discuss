@@ -10,6 +10,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { createGroupDiscussTool } from "./tools/group-discuss.js";
 import { createGroupDiscussContextTool } from "./tools/group-discuss-context.js";
 import { createSessionManageTool } from "./tools/session-manage.js";
+import { createPanelControlTool } from "./tools/panel-control.js";
 import { Logger } from "./utils/Logger.js";
 import { getConfigLoader } from "./config/ConfigLoader.js";
 
@@ -33,6 +34,7 @@ export const GroupDiscussPlugin: Plugin = async (ctx) => {
       group_discuss: createGroupDiscussTool(client, directory),
       group_discuss_context: createGroupDiscussContextTool(directory),
       session_manage: createSessionManageTool(client),
+      panel_control: createPanelControlTool(client, directory),
     },
 
     // 使用统一的 event 钩子监听所有事件

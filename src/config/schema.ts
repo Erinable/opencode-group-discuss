@@ -1,6 +1,6 @@
 /**
  * Configuration Schema for opencode-group-discuss
- * 
+ *
  * Configuration file locations (in order of precedence):
  * 1. .opencode/group-discuss.json (project-level, highest priority)
  * 2. ~/.config/opencode/group-discuss.json (global-level)
@@ -192,7 +192,16 @@ export interface DebugConfigOverride {
  */
 export interface TuiConfigOverride {
   /** Enable real-time transcript session in TUI */
+  /**
+   * @deprecated The sub-session transcript feature is deprecated. Use `use_tmux` instead.
+   */
   enable_transcript?: boolean;
+
+  /** Enable Tmux integration for live transcript pane */
+  use_tmux?: boolean;
+
+  /** Orientation of the transcript pane */
+  tmux_pane_orientation?: 'horizontal' | 'vertical';
 }
 
 /**
@@ -302,6 +311,8 @@ export const DEFAULT_CONFIG: {
 
   tui: {
     enable_transcript: true,
+    use_tmux: true,
+    tmux_pane_orientation: 'horizontal',
   },
 };
 
