@@ -338,12 +338,26 @@ export function getPredefinedTheme(themeName: PredefinedTheme | string): Theme {
  * @returns Merged theme object
  */
 export function mergeTheme(baseTheme: Theme, overrides: ThemeOverride): Theme {
+  // Deep merge UI elements (each element is an object that may have partial overrides)
+  const mergedUi: Theme['ui'] = { ...baseTheme.ui };
+  if (overrides.ui) {
+    for (const key in overrides.ui) {
+      const elementKey = key as keyof Theme['ui'];
+      const baseElement = baseTheme.ui[elementKey];
+      const overrideElement = overrides.ui[elementKey];
+
+      if (overrideElement && typeof overrideElement === 'object') {
+        // Deep merge individual UI element properties
+        mergedUi[elementKey] = { ...(baseElement || {}), ...overrideElement } as any;
+      } else if (overrideElement) {
+        mergedUi[elementKey] = overrideElement;
+      }
+    }
+  }
+
   return {
     ...baseTheme,
-    ui: {
-      ...baseTheme.ui,
-      ...overrides.ui,
-    },
+    ui: mergedUi,
     agents: {
       ...baseTheme.agents,
       ...overrides.agents,

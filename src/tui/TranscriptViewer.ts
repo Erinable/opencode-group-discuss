@@ -366,7 +366,7 @@ function showHistoryMenu() {
         screen.render();
 
         // Handle selection
-        historyList.once('select', (item, index) => {
+        historyList.once('select', (item: unknown, index: number) => {
              const selectedLog = logs[index];
              if (selectedLog) {
                  startHistoryMode(path.join(logDir, selectedLog.name));

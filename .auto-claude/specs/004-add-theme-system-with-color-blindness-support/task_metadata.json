@@ -1,0 +1,13 @@
+{
+  "sourceType": "ideation",
+  "ideationType": "ui_ux_improvements",
+  "ideaId": "uiux-001",
+  "rationale": "The current TUI uses hardcoded colors (cyan, magenta, red, green) which may be inaccessible to users with color vision deficiencies (especially red/green color blindness). A theme system would improve accessibility and allow personalization.",
+  "category": "ui_ux",
+  "uiuxCategory": "accessibility",
+  "affectedFiles": [
+    "src/tui/TranscriptViewer.ts",
+    "src/config/schema.ts"
+  ],
+  "problemSolved": "Colors are hardcoded in TranscriptViewer.ts:\n- Human agents: cyan\n- Planner agents: magenta\n- Critic agents: red (problematic for red/green color blindness)\n- Default agents: green\n- Error messages: red\n- Success messages: green\n- History mode: magenta background\n\nNo theme configuration exists in schema.ts."
+}

@@ -1,0 +1,60 @@
+{
+  "files_to_modify": {
+    "config": [
+      "src/config/schema.ts",
+      "src/config/ConfigLoader.ts"
+    ],
+    "tui": [
+      "src/tui/TranscriptViewer.ts"
+    ],
+    "types": [
+      "src/types/index.ts"
+    ]
+  },
+  "files_to_reference": [
+    "src/config/schema.ts",
+    "src/config/ConfigLoader.ts",
+    "src/tui/TranscriptViewer.ts"
+  ],
+  "patterns": {
+    "config_pattern": "Configuration defined in schema.ts with TypeScript interfaces, loaded by ConfigLoader singleton, supports project-level (.opencode/) and global-level (~/.config/) configs with proper precedence",
+    "color_usage": "TUI uses blessed library with hardcoded colors (cyan, magenta, red, green, blue, yellow, white, black, gray) in TranscriptViewer.ts for header, logBox, footer, scrollbar, historyList, and agent color mapping",
+    "agent_colors": "Agent types mapped to colors: human=cyan, planner=magenta, critic=red, default=green",
+    "tui_config": "Existing TuiConfigOverride only has transcript/pane settings (use_tmux, tmux_pane_orientation) - perfect place to add theme config"
+  },
+  "existing_implementations": {
+    "description": "ConfigLoader uses singleton pattern, loads from JSON files with JSONC comment support, deep merges configs with proper precedence (project > global > defaults)",
+    "relevant_files": [
+      "src/config/schema.ts",
+      "src/config/ConfigLoader.ts"
+    ],
+    "hardcoded_colors_found": {
+      "TranscriptViewer.ts": {
+        "line_37_40": "header: fg=cyan, bg=black, border=cyan",
+        "line_59_60": "scrollbar: bg=cyan, track=black",
+        "line_63_66": "logBox: fg=white, bg=black, border=#333333",
+        "line_77_79": "footer: fg=gray, bg=black",
+        "line_97_98": "historyList: selected={bg=blue, fg=white}, border=yellow",
+        "line_166": "header live mode: fg=cyan",
+        "line_220": "header history mode: bg=magenta",
+        "line_239_250_339": "error messages: red-fg",
+        "line_343": "consensus: green-bg, black-fg",
+        "line_354_358": "getAgentColor: human=cyan, planner=magenta, critic=red, default=green",
+        "line_375": "inline code: magenta-fg",
+        "line_384": "list bullets: cyan-fg"
+      }
+    }
+  },
+  "tech_stack": {
+    "language": "TypeScript",
+    "runtime": "Node.js >=20.0.0",
+    "tui_library": "blessed@0.1.81",
+    "build_tool": "tsc",
+    "test_framework": "node --test"
+  },
+  "accessibility_requirements": {
+    "color_blindness_support": "Must support protanopia, deuteranopia, tritanopia color vision deficiencies",
+    "high_contrast_mode": "Must provide high-contrast theme for better visibility",
+    "default_theme": "Must maintain backward compatibility with current color scheme"
+  }
+}

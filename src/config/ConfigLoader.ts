@@ -22,7 +22,8 @@ import type {
   DebugConfigOverride,
   TuiConfigOverride,
 } from './schema.js';
-import type { Theme, ThemeConfigOverride } from './theme.js';
+import type { Theme } from './theme.js';
+import type { ThemeConfigOverride } from './schema.js';
 import { DEFAULT_CONFIG, CONFIG_FILE_NAME } from './schema.js';
 import { getPredefinedTheme, mergeTheme } from './theme.js';
 

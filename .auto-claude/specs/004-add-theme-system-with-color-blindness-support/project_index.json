@@ -1,0 +1,27 @@
+{
+  "project_type": "single",
+  "services": {
+    "tui": {
+      "path": ".",
+      "tech_stack": ["typescript", "node.js", "blessed"],
+      "port": null,
+      "dev_command": "npm run dev",
+      "test_command": "npm test",
+      "build_command": "npm run build"
+    }
+  },
+  "infrastructure": {
+    "docker": false,
+    "database": false,
+    "ci_cd": "github"
+  },
+  "conventions": {
+    "linter": "typescript",
+    "formatter": "tsc",
+    "testing": "node --test"
+  },
+  "entry_points": {
+    "tui": "src/tui/TranscriptViewer.ts",
+    "config": "src/config/ConfigLoader.ts"
+  }
+}

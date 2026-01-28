@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/**)",
+      "Write(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/**)",
+      "Edit(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/**)",
+      "Glob(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/**)",
+      "Grep(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/**)",
+      "Read(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/.auto-claude/specs/004-add-theme-system-with-color-blindness-support/**)",
+      "Write(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/.auto-claude/specs/004-add-theme-system-with-color-blindness-support/**)",
+      "Edit(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/worktrees/tasks/004-add-theme-system-with-color-blindness-support/.auto-claude/specs/004-add-theme-system-with-color-blindness-support/**)",
+      "Read(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/**)",
+      "Write(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/**)",
+      "Edit(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/**)",
+      "Glob(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/**)",
+      "Grep(/Users/hanguoliang01/development/auto-coder/opencode-group-discuss/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}

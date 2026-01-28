@@ -66,7 +66,11 @@ export class ThemeManager {
     }
 
     const themeConfig = await this.configLoader.getThemeConfig();
-    this.cachedTheme = themeConfig.resolved_theme;
+    const theme = themeConfig.resolved_theme;
+    if (!theme) {
+      throw new Error('Failed to load theme configuration');
+    }
+    this.cachedTheme = theme;
 
     return this.cachedTheme;
   }
@@ -86,7 +90,7 @@ export class ThemeManager {
    */
   async getUIElementColor(elementName: keyof Theme['ui']): Promise<BlessedStyle> {
     const theme = await this.getTheme();
-    const colorStyle = theme.ui[elementName];
+    const colorStyle = theme.ui[elementName] as ColorStyle;
 
     return this.toBlessedStyle(colorStyle);
   }
