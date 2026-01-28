@@ -20,8 +20,8 @@ let themeManager: ThemeManager;
 
 // Terminal Size Validation
 function validateTerminalSize(): void {
-  const minWidth = 80;
-  const minHeight = 24;
+  const minWidth = 30;
+  const minHeight = 10;
 
   const columns = process.stdout.columns;
   const rows = process.stdout.rows;
