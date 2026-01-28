@@ -269,13 +269,13 @@ async function startLiveMode() {
     // Start tail
     tailProcess = spawn('tail', ['-f', '-n', '100', liveLogFilePath]);
 
-    tailProcess.stdout?.on('data', (data) => {
+    tailProcess.stdout?.on('data', async (data) => {
         const lines = data.toString().split('\n');
         for (const line of lines) {
             if (!line.trim()) continue;
             try {
                 const msg = JSON.parse(line);
-                processMessage(msg);
+                await processMessage(msg);
             } catch (e) {
                 logBox.log(`{gray-fg}${line}{/gray-fg}`);
             }
@@ -322,7 +322,7 @@ async function startHistoryMode(selectedPath: string) {
             if (!line.trim()) continue;
             try {
                 const msg = JSON.parse(line);
-                processMessage(msg);
+                await processMessage(msg);
             } catch (e) {
                 logBox.log(`{gray-fg}${line}{/gray-fg}`);
             }
@@ -386,7 +386,7 @@ function hideHistoryMenu() {
 }
 
 
-function processMessage(msg: any) {
+async function processMessage(msg: any) {
     switch (msg.type) {
         case 'meta':
              const prefix = isLiveMode ? '📢 Group Discussion' : '📜 History';
@@ -398,7 +398,7 @@ function processMessage(msg: any) {
              break;
 
         case 'message':
-             const agentColor = getAgentColor(msg.payload.subagentType);
+             const agentColor = await getAgentColor(msg.payload.subagentType);
              logBox.log(`{${agentColor}-fg}{bold}@${msg.payload.agent}{/bold} (${msg.payload.role || msg.payload.subagentType}){/${agentColor}-fg}`);
 
              // Markdown Rendering (Line-by-line)
@@ -425,19 +425,22 @@ function processMessage(msg: any) {
                      logBox.log(escapeTags(line));
                  } else {
                      // Normal text: Apply Markdown Formatters
-                     logBox.log(formatMarkdownLine(line));
+                     logBox.log(await formatMarkdownLine(line));
                  }
              }
              logBox.log(''); // Trailing newline for separation
              break;
 
         case 'error':
-             logBox.log(`{red-fg}{bold}⚠️ Error (@${msg.payload.agent}){/bold}: ${msg.payload.message}{/red-fg}`);
+             const errorColor = await themeManager.getMessageColor('error');
+             logBox.log(`{${errorColor}-fg}{bold}⚠️ Error (@${msg.payload.agent}){/bold}: ${msg.payload.message}{/${errorColor}-fg}`);
              break;
 
         case 'conclusion':
-             logBox.log(`\n{green-bg}{black-fg}{bold} ✅ Consensus Reached {/bold}{/black-fg}{/green-bg}`);
-             logBox.log(formatMarkdownLine(msg.payload.content || ''));
+             const consensusBg = await themeManager.getMessageColor('consensusBg');
+             const consensusFg = await themeManager.getMessageColor('consensusFg');
+             logBox.log(`\n{${consensusBg}-bg}{${consensusFg}-fg}{bold} ✅ Consensus Reached {/bold}{/${consensusFg}-fg}{/${consensusBg}-bg}`);
+             logBox.log(await formatMarkdownLine(msg.payload.content || ''));
              break;
 
         default:
@@ -445,12 +448,13 @@ function processMessage(msg: any) {
     }
 }
 
-function getAgentColor(type: string): string {
-    switch (type) {
-        case 'human': return 'cyan';
-        case 'planner': return 'magenta';
-        case 'critic': return 'red';
-        default: return 'green';
+async function getAgentColor(type: string): Promise<string> {
+    const agentType = type as keyof import('../config/theme.js').AgentColors;
+    try {
+        return await themeManager.getAgentColor(agentType);
+    } catch {
+        // Fallback to default if agent type not found
+        return await themeManager.getAgentColor('default');
     }
 }
 
@@ -458,7 +462,7 @@ function escapeTags(str: string): string {
     return str.replace(/[{}]/g, (match) => match === '{' ? '\{' : '\}');
 }
 
-function formatMarkdownLine(line: string): string {
+async function formatMarkdownLine(line: string): Promise<string> {
     let output = escapeTags(line);
 
     // Bold: **text**
@@ -468,7 +472,8 @@ function formatMarkdownLine(line: string): string {
     // output = output.replace(/\*([^\*]+)\*/g, '{u}$1{/u}'); // Disabled to avoid unwanted * list conflicts
 
     // Inline Code: `text`
-    output = output.replace(/`([^`]+)`/g, '{magenta-fg}$1{/magenta-fg}');
+    const inlineCodeColor = await themeManager.getMessageColor('inlineCode');
+    output = output.replace(/`([^`]+)`/g, `{${inlineCodeColor}-fg}$1{/${inlineCodeColor}-fg}`);
 
     // Headers: # Title
     if (output.startsWith('#')) {
@@ -477,7 +482,8 @@ function formatMarkdownLine(line: string): string {
 
     // Lists: - Item (Highlight bullet)
     if (output.trim().startsWith('- ')) {
-        output = output.replace(/^- /, '{cyan-fg}- {/cyan-fg}');
+        const listBulletColor = await themeManager.getMessageColor('listBullet');
+        output = output.replace(/^- /, `{${listBulletColor}-fg}- {/${listBulletColor}-fg}`);
     }
 
     return output;
