@@ -22,7 +22,9 @@ import type {
   DebugConfigOverride,
   TuiConfigOverride,
 } from './schema.js';
+import type { Theme, ThemeConfigOverride } from './theme.js';
 import { DEFAULT_CONFIG, CONFIG_FILE_NAME } from './schema.js';
+import { getPredefinedTheme, mergeTheme } from './theme.js';
 
 /**
  * Resolved configuration with all values populated
@@ -36,7 +38,7 @@ export interface ResolvedConfig {
   context_budget: Required<ContextBudgetConfigOverride>;
   logging: Required<LoggingConfigOverride>;
   debug: Required<DebugConfigOverride>;
-  tui: Required<TuiConfigOverride>;
+  tui: Required<Omit<TuiConfigOverride, 'theme'>> & { theme: Required<ThemeConfigOverride> & { resolved_theme: Theme } };
 }
 
 /**
@@ -135,6 +137,14 @@ export class ConfigLoader {
   async getContextCompactionConfig(): Promise<ResolvedContextCompactionConfig> {
     const config = await this.loadConfig();
     return config.context_compaction;
+  }
+
+  /**
+   * Get theme configuration
+   */
+  async getThemeConfig(): Promise<Required<ThemeConfigOverride> & { resolved_theme: Theme }> {
+    const config = await this.loadConfig();
+    return config.tui.theme;
   }
 
   /**
@@ -270,7 +280,18 @@ export class ConfigLoader {
 
       // Merge TUI config
       if (config.tui) {
-        result.tui = { ...result.tui, ...config.tui };
+        result.tui = {
+          ...result.tui,
+          ...config.tui,
+          // Deep merge theme config
+          theme: {
+            theme: config.tui.theme?.theme ?? result.tui?.theme?.theme,
+            custom_theme: {
+              ...result.tui?.theme?.custom_theme,
+              ...config.tui.theme?.custom_theme,
+            },
+          },
+        };
       }
     }
 
@@ -354,7 +375,28 @@ export class ConfigLoader {
         enable_transcript: config.tui?.enable_transcript ?? DEFAULT_CONFIG.tui.enable_transcript,
         use_tmux: config.tui?.use_tmux ?? DEFAULT_CONFIG.tui.use_tmux,
         tmux_pane_orientation: config.tui?.tmux_pane_orientation ?? DEFAULT_CONFIG.tui.tmux_pane_orientation,
+        theme: this.resolveThemeConfig(config.tui?.theme),
       },
+    };
+  }
+
+  /**
+   * Resolve theme configuration
+   */
+  private resolveThemeConfig(themeConfig?: ThemeConfigOverride): Required<ThemeConfigOverride> & { resolved_theme: Theme } {
+    const themeName = themeConfig?.theme ?? DEFAULT_CONFIG.tui.theme.theme;
+    const customTheme = themeConfig?.custom_theme;
+
+    // Get the base predefined theme
+    const baseTheme = getPredefinedTheme(themeName);
+
+    // Merge custom overrides if provided
+    const resolvedTheme = customTheme ? mergeTheme(baseTheme, customTheme) : baseTheme;
+
+    return {
+      theme: themeName,
+      custom_theme: customTheme ?? {},
+      resolved_theme: resolvedTheme,
     };
   }
 
