@@ -16,6 +16,26 @@ let isLiveMode = true;
 let tailProcess: ChildProcess | null = null;
 let autoScroll = true;
 
+// Terminal Size Validation
+function validateTerminalSize(): void {
+  const minWidth = 80;
+  const minHeight = 24;
+
+  const columns = process.stdout.columns;
+  const rows = process.stdout.rows;
+
+  if (columns < minWidth || rows < minHeight) {
+    console.error('\nError: Terminal size is too small.');
+    console.error(`Minimum required: ${minWidth}x${minHeight} (columns x rows)`);
+    console.error(`Current terminal: ${columns}x${rows}`);
+    console.error('\nPlease resize your terminal and try again.\n');
+    process.exit(1);
+  }
+}
+
+// Validate terminal size before creating screen
+validateTerminalSize();
+
 // Create a screen object.
 const screen = blessed.screen({
   smartCSR: true,
