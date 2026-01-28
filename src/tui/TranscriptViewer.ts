@@ -2,6 +2,7 @@ import blessed from 'blessed';
 import fs from 'fs';
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
+import { ThemeManager } from './ThemeManager.js';
 
 // Get log file path from args
 const liveLogFilePath = process.argv[2];
@@ -15,6 +16,7 @@ if (!liveLogFilePath) {
 let isLiveMode = true;
 let tailProcess: ChildProcess | null = null;
 let autoScroll = true;
+let themeManager: ThemeManager;
 
 // Terminal Size Validation
 function validateTerminalSize(): void {
@@ -46,58 +48,77 @@ const screen = blessed.screen({
 // --- Widgets ---
 
 // Header
-const header = blessed.box({
-  top: 0,
-  left: 0,
-  width: '100%',
-  height: 3,
-  content: '{bold}📢 Group Discussion Transcript{/bold}\n{center}Initializing...{/center}',
-  tags: true,
-  style: {
-    fg: 'cyan',
-    bg: 'black',
-    border: { fg: 'cyan' } // If border renders
-  }
-});
+let header: any;
+let logBox: any;
+let footer: any;
+let historyList: any;
 
-// Log Box (Main Content)
-const logBox = blessed.log({
-  top: 3,
-  left: 0,
-  width: '100%',
-  height: '100%-4',
-  content: '',
-  tags: true,
-  border: { type: 'line' },
-  scrollable: true,
-  alwaysScroll: true,
-  keys: true, // Enable keyboard scrolling (arrows, page up/down)
-  vi: true,   // Enable vi-style keys (j/k/g/G)
-  mouse: true, // Enable mouse wheel scrolling
-  scrollbar: {
-    ch: ' ',
-    style: { bg: 'cyan' }, // Handle
-    track: { bg: 'black' } // Invisible track
-  },
-  style: {
-    fg: 'white',
-    bg: 'black',
-    border: { fg: '#333333' }
-  }
-});
+async function initializeWidgets() {
+  // Initialize theme manager
+  themeManager = ThemeManager.getInstance();
+  await themeManager.loadTheme();
 
-// Footer
-const footer = blessed.box({
-  bottom: 0,
-  left: 0,
-  width: '100%',
-  height: 1,
-  content: ' q: Quit | h: History | Space: Pause',
-  style: {
-    fg: 'gray',
-    bg: 'black'
-  }
-});
+  // Get theme colors
+  const headerStyle = await themeManager.getUIElementColor('header');
+  const headerBorder = await themeManager.getUIElementBorderStyle('header');
+  const footerStyle = await themeManager.getUIElementColor('footer');
+  const logBoxStyle = await themeManager.getUIElementColor('logBox');
+  const logBoxBorder = await themeManager.getUIElementBorderStyle('logBox');
+  const scrollbarHandle = await themeManager.getUIElementColor('scrollbarHandle');
+  const scrollbarTrack = await themeManager.getUIElementColor('scrollbarTrack');
+  const historyListStyle = await themeManager.getUIElementColor('historyList');
+  const historyListBorder = await themeManager.getUIElementBorderStyle('historyList');
+  const historyListSelected = await themeManager.getUIElementColor('historyListSelected');
+
+  // Header
+  header = blessed.box({
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: 3,
+    content: '{bold}📢 Group Discussion Transcript{/bold}\n{center}Initializing...{/center}',
+    tags: true,
+    style: {
+      ...headerStyle,
+      border: headerBorder
+    }
+  });
+
+  // Log Box (Main Content)
+  logBox = blessed.log({
+    top: 3,
+    left: 0,
+    width: '100%',
+    height: '100%-4',
+    content: '',
+    tags: true,
+    border: { type: 'line' },
+    scrollable: true,
+    alwaysScroll: true,
+    keys: true, // Enable keyboard scrolling (arrows, page up/down)
+    vi: true,   // Enable vi-style keys (j/k/g/G)
+    mouse: true, // Enable mouse wheel scrolling
+    scrollbar: {
+      ch: ' ',
+      style: scrollbarHandle,
+      track: scrollbarTrack
+    },
+    style: {
+      ...logBoxStyle,
+      border: logBoxBorder
+    }
+  });
+
+  // Footer
+  footer = blessed.box({
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: 1,
+    content: ' q: Quit | h: History | Space: Pause',
+    style: footerStyle
+  });
+}
 
 // Helper function to calculate responsive overlay size
 function calculateOverlaySize() {
@@ -122,39 +143,51 @@ function calculateOverlaySize() {
 }
 
 // History List (Overlay - initially hidden)
-const overlaySize = calculateOverlaySize();
-const historyList = blessed.list({
-  top: 'center',
-  left: 'center',
-  width: overlaySize.width,
-  height: overlaySize.height,
-  label: ' {bold}Select History Log{/bold} ',
-  tags: true,
-  keys: true,
-  vi: true,
-  mouse: true,
-  scrollable: true,
-  alwaysScroll: true,
-  scrollbar: {
-    ch: ' ',
-    style: { bg: 'cyan' },
-    track: { bg: 'black' }
-  },
-  border: { type: 'line' },
-  style: {
-    fg: 'white',
-    bg: 'black',
-    selected: { bg: 'blue', fg: 'white', bold: true },
-    border: { fg: 'yellow' }
-  },
-  hidden: true
-});
+
+async function initializeHistoryList() {
+  const overlaySize = calculateOverlaySize();
+
+  // Theme colors
+  const historyListStyle = await themeManager.getUIElementColor('historyList');
+  const historyListBorder = await themeManager.getUIElementBorderStyle('historyList');
+  const historyListSelected = await themeManager.getUIElementColor('historyListSelected');
+  const scrollbarHandle = await themeManager.getUIElementColor('scrollbarHandle');
+  const scrollbarTrack = await themeManager.getUIElementColor('scrollbarTrack');
+
+  historyList = blessed.list({
+    top: 'center',
+    left: 'center',
+    width: overlaySize.width,
+    height: overlaySize.height,
+    label: ' {bold}Select History Log{/bold} ',
+    tags: true,
+    keys: true,
+    vi: true,
+    mouse: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+      ch: ' ',
+      style: scrollbarHandle,
+      track: scrollbarTrack
+    },
+    border: { type: 'line' },
+    style: {
+      ...historyListStyle,
+      selected: historyListSelected,
+      border: historyListBorder
+    },
+    hidden: true
+  });
+}
 
 // --- Layout Composition ---
-screen.append(header);
-screen.append(logBox);
-screen.append(footer);
-screen.append(historyList);
+async function appendWidgets() {
+  screen.append(header);
+  screen.append(logBox);
+  screen.append(footer);
+  screen.append(historyList);
+}
 
 // --- Key Bindings ---
 
@@ -193,6 +226,8 @@ screen.key(['h'], function(ch, key) {
 // --- Logic ---
 
 function updateFooter() {
+    if (!footer) return; // Guard: footer not initialized yet
+
     let status = '';
     if (isLiveMode) {
         status = autoScroll ? 'Live (Auto-scrolling)' : 'Live (Paused)';
@@ -203,7 +238,7 @@ function updateFooter() {
     footer.setContent(` q: Quit | h: History | Space: ${autoScroll ? 'Pause' : 'Resume'} | Esc: ${isLiveMode ? 'Quit' : 'Back to Live'} | [${status}]`);
 }
 
-function startLiveMode() {
+async function startLiveMode() {
     isLiveMode = true;
     hideHistoryMenu(); // Ensure menu is gone
 
@@ -212,8 +247,10 @@ function startLiveMode() {
     logBox.setLabel(' {bold}Live Transcript{/bold} ');
     logBox.focus();
 
-    header.style.bg = 'black'; // Keep black
-    header.style.fg = 'cyan';
+    // Apply theme colors to header
+    const headerStyle = await themeManager.getUIElementColor('header');
+    header.style.bg = headerStyle.bg || 'black';
+    header.style.fg = headerStyle.fg || 'cyan';
     header.setContent('{bold}📢 Group Discussion Transcript{/bold}\n{center}Waiting for updates...{/center}');
 
     updateFooter();
@@ -252,7 +289,7 @@ function startLiveMode() {
     screen.render();
 }
 
-function startHistoryMode(selectedPath: string) {
+async function startHistoryMode(selectedPath: string) {
     isLiveMode = false;
     hideHistoryMenu();
 
@@ -267,7 +304,12 @@ function startHistoryMode(selectedPath: string) {
     logBox.setLabel(` {bold}History: ${path.basename(selectedPath)}{/bold} `);
     logBox.focus();
 
+    // Apply theme colors to header with history mode visual cue
+    // Note: Using magenta for history mode visual distinction
+    // TODO: Consider adding ui.headerHistory to theme for customization
+    const headerStyle = await themeManager.getUIElementColor('header');
     header.style.bg = 'magenta'; // Visual cue for history mode
+    header.style.fg = headerStyle.fg || 'white';
     header.setContent(`{bold}📜 History Viewer{/bold}\n{center}${path.basename(selectedPath)}{/center}`);
 
     updateFooter();
@@ -293,6 +335,8 @@ function startHistoryMode(selectedPath: string) {
 }
 
 function showHistoryMenu() {
+    if (!historyList || !logBox) return; // Guard: widgets not initialized yet
+
     const logDir = path.dirname(liveLogFilePath);
 
     fs.readdir(logDir, (err, files) => {
@@ -334,6 +378,8 @@ function showHistoryMenu() {
 }
 
 function hideHistoryMenu() {
+    if (!historyList || !logBox) return; // Guard: widgets not initialized yet
+
     historyList.hide();
     logBox.focus();
     screen.render();
@@ -437,7 +483,17 @@ function formatMarkdownLine(line: string): string {
     return output;
 }
 
-// Start in Live Mode
-startLiveMode();
+// Initialize and start in Live Mode
+async function main() {
+  await initializeWidgets();
+  await initializeHistoryList();
+  await appendWidgets();
+  await startLiveMode();
+}
+
+main().catch(err => {
+  console.error('Failed to start TranscriptViewer:', err);
+  process.exit(1);
+});
 
 
