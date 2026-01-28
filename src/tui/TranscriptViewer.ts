@@ -99,17 +99,47 @@ const footer = blessed.box({
   }
 });
 
+// Helper function to calculate responsive overlay size
+function calculateOverlaySize() {
+  const cols = process.stdout.columns || 80;
+  const rows = process.stdout.rows || 24;
+
+  // For small terminals (80x24 minimum), use more space
+  // For larger terminals, use smaller percentage for better aesthetics
+  let widthPct, heightPct;
+
+  if (cols <= 100 || rows <= 30) {
+    // Small terminals: use more space (90-95%)
+    widthPct = cols <= 80 ? '95%' : '90%';
+    heightPct = rows <= 24 ? '90%' : '85%';
+  } else {
+    // Larger terminals: use standard 80%
+    widthPct = '80%';
+    heightPct = '80%';
+  }
+
+  return { width: widthPct, height: heightPct };
+}
+
 // History List (Overlay - initially hidden)
+const overlaySize = calculateOverlaySize();
 const historyList = blessed.list({
   top: 'center',
   left: 'center',
-  width: '80%',
-  height: '80%',
+  width: overlaySize.width,
+  height: overlaySize.height,
   label: ' {bold}Select History Log{/bold} ',
   tags: true,
   keys: true,
   vi: true,
   mouse: true,
+  scrollable: true,
+  alwaysScroll: true,
+  scrollbar: {
+    ch: ' ',
+    style: { bg: 'cyan' },
+    track: { bg: 'black' }
+  },
   border: { type: 'line' },
   style: {
     fg: 'white',
