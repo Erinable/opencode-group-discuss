@@ -449,13 +449,8 @@ async function processMessage(msg: any) {
 }
 
 async function getAgentColor(type: string): Promise<string> {
-    const agentType = type as keyof import('../config/theme.js').AgentColors;
-    try {
-        return await themeManager.getAgentColor(agentType);
-    } catch {
-        // Fallback to default if agent type not found
-        return await themeManager.getAgentColor('default');
-    }
+    // ThemeManager now handles fallback safely
+    return await themeManager.getAgentColor(type);
 }
 
 function escapeTags(str: string): string {

@@ -113,9 +113,10 @@ export class ThemeManager {
   /**
    * Get agent color by agent type
    */
-  async getAgentColor(agentType: keyof Theme['agents']): Promise<ThemeColor> {
+  async getAgentColor(agentType: string): Promise<ThemeColor> {
     const theme = await this.getTheme();
-    return theme.agents[agentType];
+    const color = theme.agents[agentType as keyof Theme['agents']];
+    return color || theme.agents.default;
   }
 
   /**
