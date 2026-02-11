@@ -2,8 +2,7 @@ export function scrubString(value: string): string {
   let out = value;
 
   // Authorization headers / bearer tokens
-  out = out.replace(/Authorization\s*:\s*Bearer\s+\S+/gi, "Authorization: Bearer [REDACTED]");
-  out = out.replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]");
+  out = out.replace(/Bearer\s+\S+?(?=[,;\s"']|$)/gi, "Bearer [REDACTED]");
 
   // JWTs
   out = out.replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[REDACTED]");
