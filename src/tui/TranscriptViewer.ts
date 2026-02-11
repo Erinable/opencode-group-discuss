@@ -454,7 +454,7 @@ async function getAgentColor(type: string): Promise<string> {
 }
 
 function escapeTags(str: string): string {
-    return str.replace(/[{}]/g, (match) => match === '{' ? '\{' : '\}');
+    return str.replace(/[{}]/g, (match) => match === '{' ? '{{' : '}}');
 }
 
 async function formatMarkdownLine(line: string): Promise<string> {
