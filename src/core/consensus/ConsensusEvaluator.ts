@@ -15,6 +15,7 @@ import { DEFAULT_CONSENSUS_CONFIG } from './types.js';
 
 export class ConsensusEvaluator {
   private config: ConsensusConfig;
+  private processedKeywords: [string, number][];
 
   constructor(config: Partial<ConsensusConfig> = {}) {
     this.config = {
@@ -25,6 +26,10 @@ export class ConsensusEvaluator {
         ...config.keywordWeights
       }
     };
+
+    this.processedKeywords = Object.entries(this.config.keywordWeights!).map(
+      ([keyword, weight]) => [keyword.toLowerCase(), weight]
+    );
   }
 
   /**
@@ -68,8 +73,8 @@ export class ConsensusEvaluator {
 
     for (const msg of lastRoundMessages) {
       const content = msg.content.toLowerCase();
-      for (const [keyword, weight] of Object.entries(this.config.keywordWeights!)) {
-        if (content.includes(keyword.toLowerCase())) {
+      for (const [kwLower, weight] of this.processedKeywords) {
+        if (content.includes(kwLower)) {
           totalScore += weight;
           matchCount++;
         }
@@ -169,8 +174,8 @@ export class ConsensusEvaluator {
     let totalScore = 0;
     for (const msg of messages) {
       const content = msg.content.toLowerCase();
-      for (const [keyword, weight] of Object.entries(this.config.keywordWeights!)) {
-        if (content.includes(keyword.toLowerCase())) {
+      for (const [kwLower, weight] of this.processedKeywords) {
+        if (content.includes(kwLower)) {
           totalScore += weight;
         }
       }

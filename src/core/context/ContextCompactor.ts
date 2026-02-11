@@ -32,6 +32,7 @@ export interface ContextBuildOptions {
 export class ContextCompactor {
   private config: Required<ContextCompactorConfig>;
   private state: ContextState;
+  private processedKeywords: [string, number][];
 
   constructor(config: Partial<ContextCompactorConfig> = {}) {
     this.config = {
@@ -42,6 +43,10 @@ export class ContextCompactor {
         ...config.keywordWeights
       }
     };
+
+    this.processedKeywords = Object.entries(this.config.keywordWeights).map(
+      ([keyword, weight]) => [keyword.toLowerCase(), weight]
+    );
 
     this.state = {
       totalChars: 0,
@@ -314,8 +319,8 @@ export class ContextCompactor {
   private scoreByKeywords(contentLower: string): number {
     let totalScore = 0;
     let matches = 0;
-    for (const [keyword, weight] of Object.entries(this.config.keywordWeights)) {
-      if (contentLower.includes(keyword.toLowerCase())) {
+    for (const [kwLower, weight] of this.processedKeywords) {
+      if (contentLower.includes(kwLower)) {
         totalScore += weight;
         matches += 1;
       }
